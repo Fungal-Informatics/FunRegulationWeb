@@ -1,0 +1,15 @@
+FROM node:14.17.0
+
+WORKDIR /usr/src/app
+
+# COPY package*.json ./
+COPY . .
+
+RUN npm install
+RUN npm run build
+
+
+EXPOSE 8000 4321 8080
+
+
+CMD cd management_api && npm run start

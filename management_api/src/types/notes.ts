@@ -1,0 +1,1 @@
+import { NewBoard } from "./board";export interface NewNote {	content: string;}export interface Note extends NewBoard {	id: string;}

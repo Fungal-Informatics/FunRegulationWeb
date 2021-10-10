@@ -1,0 +1,50 @@
+version: '3'
+services:
+    api-management:
+        build:
+            context: ./management_api
+        container_name: 'management-api'
+        volumes:
+            - .:/usr/src/app/
+        working_dir: /usr/src/app
+        environment:
+            - PG_HOST=db-postgresql
+            - PG_USER=fungipass
+            - PG_DB=fungidb
+            - PG_PASS=randompassword
+            - PG_PORT=5432
+        ports:
+            - 8000:8000
+            - 8080:8080
+
+
+    worker-generic:
+        build:
+            context: ./job_worker
+        container_name: 'job-worker'
+        volumes:
+            - .:/usr/src/app/
+        working_dir: /usr/src/app
+        environment:
+            - PG_HOST=db-postgresql
+            - PG_USER=fungipass
+            - PG_DB=fungidb
+            - PG_PASS=randompassword
+            - PG_PORT=5432
+
+
+
+
+
+    db-postgresql:
+        image: postgres
+        container_name: 'postgresql-db'
+        restart: always
+        ports:
+            - "5432:5432"
+        expose:
+            - 5432
+        environment:
+            POSTGRES_DB: fungidb
+            POSTGRES_PASSWORD: randompassword
+            POSTGRES_USER: fungipass

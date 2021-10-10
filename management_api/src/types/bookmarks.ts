@@ -1,0 +1,1 @@
+export interface NewBookmark {	title: string;	url: string;}export interface Bookmark {	id: string;}

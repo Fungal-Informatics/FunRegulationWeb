@@ -1,0 +1,1 @@
+export type BoardTypes = "tasks" | "bookmarks" | "notes";export interface NewBoard {	name: string;	type: BoardTypes;}export interface Board extends NewBoard {	id: string;}

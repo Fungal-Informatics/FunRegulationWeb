@@ -1,0 +1,1 @@
+import cryptoRandomString from "crypto-random-string";import { v4 } from "uuid";export function randomKey(): string {	return cryptoRandomString({ length: 10 });}export function uuid(): string {	return v4();}

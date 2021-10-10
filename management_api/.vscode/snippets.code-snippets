@@ -1,0 +1,11 @@
+{
+	"TSDOC": {
+		"scope": "typescript",
+		"prefix": "docfun",
+		"body": [
+            "/**",
+            "  * $1.",
+            "  */",
+        ]
+    }
+}

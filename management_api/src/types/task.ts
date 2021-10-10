@@ -1,0 +1,1 @@
+export interface NewTask {	title: string;	done: boolean;	boardId: string;}export interface Task extends NewTask {	id: string;}

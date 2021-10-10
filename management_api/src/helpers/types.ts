@@ -1,0 +1,1 @@
+export type Query<Input, Output> = (input: Input) => Promise<Output>;export type Action<Input, Output> = (input: Input) => Promise<Output>;

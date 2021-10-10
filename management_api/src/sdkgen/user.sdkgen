@@ -1,0 +1,24 @@
+fn auth(
+    email: string,
+    password: string !secret
+): void
+
+fn logout(): void
+
+type User {
+    email: string
+    name: string
+}
+
+fn myUser(): User
+
+
+type NewAccount {
+    email: string
+    password: string !secret
+    name: string
+}
+
+fn createAccount(
+    newAcount: NewAccount
+): void
