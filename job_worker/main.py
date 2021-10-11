@@ -1,3 +1,9 @@
-from database import database_setup
+import database
+import cron
 
-database_setup()
+print("BEGIN")
+# exit(1)
+
+
+database.setup()
+cron.setup()

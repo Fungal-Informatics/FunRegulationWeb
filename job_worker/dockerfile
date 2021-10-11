@@ -1,6 +1,6 @@
 FROM python
 
-WORKDIR /usr/src/app
+WORKDIR /usr/src/job_worker
 
 COPY . .
 
@@ -8,5 +8,7 @@ COPY . .
 
 RUN pip3 install --no-cache-dir -r ./requirements.txt --user
 
+EXPOSE 5432
 
-CMD python3 job_worker/main.py
+
+CMD python3 main.py

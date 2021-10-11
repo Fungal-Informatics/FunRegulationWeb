@@ -7,6 +7,5 @@ management_api.env
 management_api/zapatosconfig.json
 management_api/pgtyped.json
 
-job_worker/__pycache__/database.cpython-37.pyc
-job_worker/__pycache__/database.cpython-39.pyc
-job_worker/__pycache__/database.cpython-310.pyc
+job_worker/__pycache__/
+

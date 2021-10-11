@@ -1,6 +1,6 @@
 FROM node:14.17.0
 
-WORKDIR /usr/src/app
+WORKDIR /usr/src/management_api
 
 # COPY package*.json ./
 COPY . .
@@ -9,7 +9,7 @@ RUN npm install
 RUN npm run build
 
 
-EXPOSE 8000 4321 8080
+EXPOSE 8000 5432 8080
 
 
-CMD cd management_api && npm run start
+CMD npm run start
