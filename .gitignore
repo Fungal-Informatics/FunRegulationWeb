@@ -120,3 +120,15 @@ FunRegulationWeb/funRegulationBackCode/funRegulation/projects/myproject.blast-gr
 FunRegulationWeb/funRegulationBackCode/funRegulation/projects/myproject.info
 FunRegulationWeb/funRegulationBackCode/funRegulation/projects/myproject.proteinortho-graph
 
+
+# FunRegulation
+funRegulationBackCode/venv
+funRegulationBackCode/dataformat
+funRegulationBackCode/datasets
+funRegulationBackCode/db.sqlite3
+funRegulationBackCode/funRegulationTool/__pycache__/
+funRegulationBackCode/api/__pycache__/
+funRegulationBackCode/projects/__pycache__/
+funRegulationBackCode/projects/out_files
+funRegulationBackCode/projects/NCBI_Download
+
