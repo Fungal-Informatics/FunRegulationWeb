@@ -1,12 +1,17 @@
 import logging
+
+from celery import shared_task
+from django.conf import settings
+from django.db import transaction
+from django_celery_results.models import TaskResult
+
+from funRegulationTool.task_utils import FunRegulationBaseTask
+from root.engine.proteinortho_analyse_engine import ProteinOrthoAnalyseEngine
 from asyncio.subprocess import STDOUT
 from subprocess import Popen, PIPE
 import urllib.parse
 import sys
 import os.path
-from django.conf import settings 
-from celery import shared_task
-from funRegulationTool.task_utils import FunRegulationBaseTask
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -16,14 +21,16 @@ import psycopg2
 import root.general_functions as LenzFunctions
 #from root.general_functions import select_tfs_by_organism
 
-def run_proteinortho():
+def run_proteinortho(import_registry_id):
     result = task_run_proteinortho.delay()
+    # result = task_run_proteinortho.apply_async((import_registry.pk,))
+    # import_registry.task = TaskResult.objects.get(task_id=result.task_id)
+    # import_registry.save()
     
 def run_rsat():
     result = task_run_rsat.delay()
 
-#@shared_task(bind=True, name='run_rsat', base=FunRegulationBaseTask)
-@shared_task(bind=True, name='run_rsat')
+@shared_task(bind=True, name='run_rsat', base=FunRegulationBaseTask)
 def task_run_rsat(self):
     tf_list = list()
     pwm_list = list()
@@ -102,37 +109,12 @@ def task_run_rsat(self):
                 else:
                     lib.log.info("TFBS Prediction File already exists: " +regulatory_interaction.tf_locus_tag+"-"+regulatory_interaction.tg_locus_tag+"-"+pwm.motif_id+ ".txt")
 
-@shared_task(bind=True, name='run_proteinortho')
-def task_run_proteinortho(self):
+@shared_task(bind=True, name='run_proteinortho', base=FunRegulationBaseTask)
+def task_run_proteinortho(self, items):
+    logging.info('importing genes based on registry %s' % items)
     organism_accession = "GCA_003184765.3"
     save_path_organism = settings.PROTEINORTHO_SAVE_PATH+organism_accession
-
-    organism1 = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/C.faa"
-    organism2 = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/E.faa"
+    engine = ProteinOrthoAnalyseEngine(proteinOrtho_path=settings.PROTEINORTHO_PATH, work_folder=save_path_organism)
+    engine.analyse_items(items)
+    logging.info('proteinOrtho analysis finished for items %s' % items)
     
-    command = ["perl", settings.PROTEINORTHO_PATH, organism1, organism2]
-
-    if not os.path.exists(save_path_organism):
-        os.makedirs(save_path_organism)
-
-    os.chdir(save_path_organism)
-
-    proc = Popen(command, stdout=PIPE, stderr=PIPE)
-    output, error = proc.communicate()
-
-    ret = proc.returncode
-    if ret != 0:
-        print("RETURN CODE {}".format(proc.returncode))
-        print("END\n")
-        print("OUTPUT {}".format(output))
-        print("END\n")
-        print("ERROR {}".format(error))
-        print("END\n")
-        #print("Proteinortho failed %d %s %s" % (proc.returncode, output, error))
-    else:
-        for line in output.decode().split('\n'):
-            print(line)
-        #print(proc.returncode, output, error)
-    
-    # for line in output.decode().split('\n'):
-    #     print(line)

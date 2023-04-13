@@ -1,4 +1,16 @@
+import enum
+
 from django.db import models
+from django.db.models import Q, Case, When, IntegerField, Sum
+from django.db.models.signals import post_save
+from django.contrib.auth.models import User
+from django_celery_results.models import TaskResult
+from django.dispatch import receiver
+
+from funRegulationTool import task_utils
+
+from root.utils import file_utils, task_status_utils
+
 
 class Gene(models.Model):
     organism_accession = models.ForeignKey('Organism', models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='org_accession')
@@ -126,3 +138,116 @@ class Tfbs(models.Model):
     class Meta:
         managed = False
         db_table = 'tfbs'
+
+class Project(models.Model):
+    name = models.CharField(max_length=100)
+    strain = models.CharField(max_length=10)
+    description = models.CharField(max_length=1000, null=True, blank=True)
+    locus_prefix = models.CharField(max_length=10)
+    transcript_suffix_type = models.IntegerField()
+    contig_prefix = models.CharField(max_length=20)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, related_name='projects', on_delete=models.PROTECT)
+    removed = models.BooleanField(default=False)
+    date_removed = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(User, null=True, blank=True,
+                                   related_name='projects_removed', on_delete=models.PROTECT)    
+
+    def __str__(self):
+        return self.name
+
+    def get_qtd_pending_analysis(self, distinct_feature=False):
+        fields = task_status_utils.get_analysis_fields()
+        #features = GeneFeature.objects.filter(gentool_utils.get_valid_feature_filters(self))
+        features = task_status_utils.get_feature_status_statistic(features)\
+            .filter(task_status_utils.has_analysis_in_progress_filter())
+        if distinct_feature:
+            return features.count()
+
+        aggregations = {}
+        for field in fields:
+            features = features.annotate(**{
+                'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
+                                       default=0, output_field=IntegerField())
+            })
+            aggregations['total_%s' % field] = Sum('qtd_%s' % field)
+        totals = features.aggregate(**aggregations)
+        total = 0
+        for field in fields:
+            t = totals.get('total_%s' % field, 0)
+            if t is None:
+                t = 0
+            total += t
+        return total
+
+    def has_pending_analysis(self):
+        return self.get_qtd_pending_analysis() > 0
+
+    def has_pending_imports(self):
+        return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
+
+    def has_pending_exports(self):
+        return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
+    
+class ProjectAnalysisRegistry(models.Model):
+    project = models.ForeignKey(Project, related_name='analysis_registries', on_delete=models.PROTECT)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, related_name='analysis_registries_created', on_delete=models.PROTECT)
+    date_inactive = models.DateTimeField(null=True, blank=True)
+    pfam_analyse = models.BooleanField(default=False)
+    interpro_analyse = models.BooleanField(default=False)
+    task = models.OneToOneField(TaskResult, null=True, blank=True,
+                                related_name='analysis_registry', on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return str(self.pk)
+
+class ProjectAnalysisRegistryItem(models.Model):
+    registry = models.ForeignKey(ProjectAnalysisRegistry, related_name='items', on_delete=models.PROTECT)
+    #feature = models.ForeignKey(GeneFeature, related_name='analysis_registries_items', on_delete=models.PROTECT)
+    active = models.BooleanField(default=True)
+    date_inactive = models.DateTimeField(null=True, blank=True)
+    #pfam_analysed = models.BooleanField(default=False)
+    #pfam_error = models.IntegerField(null=True, blank=True)
+    proteinortho_analysed = models.BooleanField(default=False)
+    proteinortho_error = models.IntegerField(null=True, blank=True)
+    #task_pfam = models.OneToOneField(TaskResult, null=True, blank=True,
+    #                                 related_name='pfam_analysis_registry_item', on_delete=models.SET_NULL)
+    task_proteinortho = models.OneToOneField(TaskResult, null=True, blank=True,
+                                         related_name='proteinortho_analysis_registry_item',
+                                         on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return str(self.pk)
+
+class ProteinOrthoErrorType(enum.Enum):
+    COMMAND_ERROR = 1
+
+class SystemPreferenceType(enum.Enum):
+    STRING = 1
+    INTEGER = 2
+    JSON = 3
+    BOOLEAN = 4
+    FLOAT = 5
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, related_name='profile', on_delete=models.PROTECT)
+    organization = models.CharField(max_length=200, null=True, blank=True)
+    is_admin = models.BooleanField(default=False)
+    account_confirmation = models.BooleanField(default=False)
+    account_confirmation_date = models.DateTimeField(null=True, blank=True)
+    first_login_date = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.user.username
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()

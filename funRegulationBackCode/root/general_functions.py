@@ -72,6 +72,7 @@ def select_gene_by_locus_tag(locus_tag):
         lib.log.info("Failed to execute the select into table gene", error)
 
 def select_protein_by_id(protein_id):
+    dbConnection = create_db_connection()
     protein = None
     try:
         cursor = dbConnection.cursor()
@@ -88,6 +89,7 @@ def select_protein_by_id(protein_id):
         lib.log.info(protein_id)
 
 def insert_orthology(orthology):
+    dbConnection = create_db_connection()
     try:
         cursor = dbConnection.cursor()
         count = cursor.execute("INSERT INTO orthology VALUES (%s, %s)",
@@ -120,7 +122,7 @@ def parse_orthology_file(filename):
                         model_protein = select_protein_by_id(record_model)
                         target_protein = select_protein_by_id(record_target)
                         orthology = Orthology(model_protein,target_protein)
-                        insert_orthology(orthology)
+                        #insert_orthology(orthology)
                     
     in_file.close()
     lib.log.info(filename + " parsed correctly")
