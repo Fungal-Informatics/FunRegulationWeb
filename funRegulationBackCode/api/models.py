@@ -156,38 +156,38 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
-    def get_qtd_pending_analysis(self, distinct_feature=False):
-        fields = task_status_utils.get_analysis_fields()
-        #features = GeneFeature.objects.filter(gentool_utils.get_valid_feature_filters(self))
-        features = task_status_utils.get_feature_status_statistic(features)\
-            .filter(task_status_utils.has_analysis_in_progress_filter())
-        if distinct_feature:
-            return features.count()
+    # def get_qtd_pending_analysis(self, distinct_feature=False):
+    #     fields = task_status_utils.get_analysis_fields()
+    #     features = GeneFeature.objects.filter(funregulationtools_utils.get_valid_feature_filters(self))
+    #     features = task_status_utils.get_feature_status_statistic(features)\
+    #         .filter(task_status_utils.has_analysis_in_progress_filter())
+    #     if distinct_feature:
+    #         return features.count()
 
-        aggregations = {}
-        for field in fields:
-            features = features.annotate(**{
-                'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
-                                       default=0, output_field=IntegerField())
-            })
-            aggregations['total_%s' % field] = Sum('qtd_%s' % field)
-        totals = features.aggregate(**aggregations)
-        total = 0
-        for field in fields:
-            t = totals.get('total_%s' % field, 0)
-            if t is None:
-                t = 0
-            total += t
-        return total
+    #     aggregations = {}
+    #     for field in fields:
+    #         features = features.annotate(**{
+    #             'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
+    #                                    default=0, output_field=IntegerField())
+    #         })
+    #         aggregations['total_%s' % field] = Sum('qtd_%s' % field)
+    #     totals = features.aggregate(**aggregations)
+    #     total = 0
+    #     for field in fields:
+    #         t = totals.get('total_%s' % field, 0)
+    #         if t is None:
+    #             t = 0
+    #         total += t
+    #     return total
 
-    def has_pending_analysis(self):
-        return self.get_qtd_pending_analysis() > 0
+    # def has_pending_analysis(self):
+    #     return self.get_qtd_pending_analysis() > 0
 
-    def has_pending_imports(self):
-        return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
+    # def has_pending_imports(self):
+    #     return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
 
-    def has_pending_exports(self):
-        return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
+    # def has_pending_exports(self):
+    #     return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
     
 class ProjectAnalysisRegistry(models.Model):
     project = models.ForeignKey(Project, related_name='analysis_registries', on_delete=models.PROTECT)
@@ -211,8 +211,7 @@ class ProjectAnalysisRegistryItem(models.Model):
     #pfam_error = models.IntegerField(null=True, blank=True)
     proteinortho_analysed = models.BooleanField(default=False)
     proteinortho_error = models.IntegerField(null=True, blank=True)
-    #task_pfam = models.OneToOneField(TaskResult, null=True, blank=True,
-    #                                 related_name='pfam_analysis_registry_item', on_delete=models.SET_NULL)
+    #task_pfam = models.OneToOneField(TaskResult, null=True, blank=True,related_name='pfam_analysis_registry_item', on_delete=models.SET_NULL)
     task_proteinortho = models.OneToOneField(TaskResult, null=True, blank=True,
                                          related_name='proteinortho_analysis_registry_item',
                                          on_delete=models.SET_NULL)

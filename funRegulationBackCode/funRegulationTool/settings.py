@@ -116,10 +116,12 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 CELERY_BROKER_URL = 'pyamqp://guest@localhost//'
+CELERY_RESULT_BACKEND = 'django-db'
 
 CELERY_TASK_ROUTES = {
     #task : queue
     'import_genes': 'import_genes',
+    'analyse_registry': 'analyse_registry',
     'run_proteinortho': 'run_proteinortho',
     'run_rsat': 'run_rsat',
 }
