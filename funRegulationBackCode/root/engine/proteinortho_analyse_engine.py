@@ -3,6 +3,7 @@ from django.db import transaction
 from api.models import *
 import urllib.parse
 import os.path
+from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
@@ -26,10 +27,9 @@ class ProteinOrthoAnalyseEngine:
         filename = self.work_folder + "/myproject.proteinortho.tsv"
         ret = proc.returncode
         if ret != 0:
-            self.__set_error("teste", ProteinOrthoErrorType.COMMAND_ERROR.value)
-            
+            pass
+            #self.__set_error("ERROR EXECUTING PROTEINORTHO", ProteinOrthoErrorType.COMMAND_ERROR.value)
         else:
-            #lib.log.info("Parsing "+ filename)
             with open(filename) as in_file:
                 for line in in_file:
                     if line.startswith("#"): continue
@@ -44,14 +44,12 @@ class ProteinOrthoAnalyseEngine:
                     for record_model in model_parts:
                         for record_target in target_parts:
                             if (record_model != '*' and record_target != '*'):
-                                print(record_model)
-                                print(record_target)
-                                #model_protein = select_protein_by_id(record_model)
-                                #target_protein = select_protein_by_id(record_target)
-                                #orthology = Orthology(model_protein,target_protein)
-                                #insert_orthology(orthology)
+                                model_protein = select_protein_by_id(record_model)
+                                target_protein = select_protein_by_id(record_target)
+                                orthology = Orthology(model_protein,target_protein)
+                                if(orthology != None):
+                                    insert_orthology(orthology)
             in_file.close()
-        #lib.log.info(filename + " parsed correctly")
 
 
 
