@@ -13,7 +13,7 @@ from api.models import ProjectAnalysisRegistry
 def analyse_registry(registry):
     if registry is None or type(registry) is not ProjectAnalysisRegistry:
         raise ValueError('registry should be an instance of ProjectAnalysisRegistry')
-    result = task_analyse_registry.apply_async((registry.pk,)) # type: ignore
+    result = task_analyse_registry.apply_async((registry.pk,)) 
     registry.task = TaskResult.objects.get(task_id=result.task_id)
     registry.save()
 
@@ -21,10 +21,14 @@ def analyse_registry(registry):
 def task_analyse_registry(self, registry_id):
     registry = ProjectAnalysisRegistry.objects.get(pk=registry_id)
     with transaction.atomic():
-        if registry.pfam_analyse:
-            result = task_run_proteinortho.apply_async([], kwargs={}) # type: ignore
+        if registry.proteinortho_analyse:
+            result = task_run_proteinortho.apply_async([], kwargs={}) 
             registry.task = TaskResult.objects.get(task_id=result.task_id)
             registry.save()
+            if registry.rsat_analyse:
+                result = task_run_rsat.apply_async([], kwargs={})
+                registry.task = TaskResult.objects.get(task_id=result.task_id)
+                registry.save()
 
 @shared_task(bind=True, name='run_proteinortho', base=FunRegulationBaseTask)
 def task_run_proteinortho(self):

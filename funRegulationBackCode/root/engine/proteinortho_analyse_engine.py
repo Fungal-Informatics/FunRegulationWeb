@@ -3,7 +3,7 @@ from django.db import transaction
 from api.models import *
 import urllib.parse
 import os.path
-from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology
+from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology, construct_grn_orthology
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
@@ -12,10 +12,10 @@ class ProteinOrthoAnalyseEngine:
         self.timeout = timeout
 
     def analyse_items(self):
-        organism1 = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/C.faa"
-        organism2 = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/E.faa"
+        model_organism = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/C.faa"
+        target_organism = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/E.faa"
     
-        command = ["perl", self.proteinOrtho_path, organism1, organism2]
+        command = ["perl", self.proteinOrtho_path, model_organism, target_organism]
 
         if not os.path.exists(self.work_folder):
             os.makedirs(self.work_folder)
@@ -50,6 +50,7 @@ class ProteinOrthoAnalyseEngine:
                                 if(orthology != None):
                                     insert_orthology(orthology)
             in_file.close()
+            construct_grn_orthology()
 
 
 

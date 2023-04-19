@@ -194,8 +194,8 @@ class ProjectAnalysisRegistry(models.Model):
     date_created = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, related_name='analysis_registries_created', on_delete=models.PROTECT)
     date_inactive = models.DateTimeField(null=True, blank=True)
-    pfam_analyse = models.BooleanField(default=False)
-    interpro_analyse = models.BooleanField(default=False)
+    proteinortho_analyse = models.BooleanField(default=False)
+    rsat_analyse = models.BooleanField(default=False)
     task = models.OneToOneField(TaskResult, null=True, blank=True,
                                 related_name='analysis_registry', on_delete=models.SET_NULL)
 
@@ -207,14 +207,17 @@ class ProjectAnalysisRegistryItem(models.Model):
     #feature = models.ForeignKey(GeneFeature, related_name='analysis_registries_items', on_delete=models.PROTECT)
     active = models.BooleanField(default=True)
     date_inactive = models.DateTimeField(null=True, blank=True)
-    #pfam_analysed = models.BooleanField(default=False)
-    #pfam_error = models.IntegerField(null=True, blank=True)
     proteinortho_analysed = models.BooleanField(default=False)
     proteinortho_error = models.IntegerField(null=True, blank=True)
-    #task_pfam = models.OneToOneField(TaskResult, null=True, blank=True,related_name='pfam_analysis_registry_item', on_delete=models.SET_NULL)
     task_proteinortho = models.OneToOneField(TaskResult, null=True, blank=True,
                                          related_name='proteinortho_analysis_registry_item',
                                          on_delete=models.SET_NULL)
+    rsat_analysed = models.BooleanField(default=False)
+    rsat_error = models.IntegerField(null=True, blank=True)
+    task_rsat = models.OneToOneField(TaskResult, null=True, blank=True,
+                                         related_name='rsat_analysis_registry_item',
+                                         on_delete=models.SET_NULL)
+    
 
     def __str__(self):
         return str(self.pk)
@@ -240,6 +243,39 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
+class OrganismFeature(models.Model):
+    organism = models.ForeignKey(Organism, related_name='features', on_delete=models.PROTECT)
+    feature_id = models.CharField(null=True, blank=True, max_length=20)
+    feature = models.CharField(null=True, blank=True, max_length=10)
+    last_proteinortho_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
+                                              related_name='last_gene_feature_proteinortho',
+                                              null=True, blank=True, on_delete=models.SET_NULL)
+    last_rsat_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
+                                                  related_name='last_gene_feature_rsat',
+                                                  null=True, blank=True, on_delete=models.SET_NULL)
+    removed = models.BooleanField(default=False)
+    date_removed = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(User, null=True, blank=True,
+                                   related_name='features_removed', on_delete=models.PROTECT)
+
+    def has_analysis_in_progress(self):
+        """
+        Return whether this feature has an analysis process in progress.
+        """
+        return self.last_proteinortho_analysis_in_progress or \
+               self.last_rsat_analysis_in_progress
+
+    def has_analysis_with_error(self):
+        """
+        Return whether this feature has an analysis process which returned an error.
+        """
+        return (self.last_proteinortho_registry
+                and not self.last_proteinortho_analysis_in_progress and not self.last_proteinortho_analysis_ok) or \
+               (self.last_rsat_registry
+                and not self.last_rsat_analysis_in_progress and not self.last_rsat_analysis_ok)
+
+    def __str__(self):
+        return self.feature_id
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
