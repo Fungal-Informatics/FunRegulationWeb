@@ -8,9 +8,7 @@ from django_celery_results.models import TaskResult
 from django.dispatch import receiver
 
 from funRegulationTool import task_utils
-
-from root.utils import file_utils, task_status_utils
-
+from root.utils import file_utils, task_status_utils, funregulationtools_utils
 
 class Gene(models.Model):
     organism_accession = models.ForeignKey('Organism', models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='org_accession')
@@ -22,7 +20,6 @@ class Gene(models.Model):
     class Meta:
         managed = False
         db_table = 'gene'
-
 
 class ModelRegulatory(models.Model):
     tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='gene_tf_locus_tag')
@@ -38,6 +35,55 @@ class ModelRegulatory(models.Model):
         managed = False
         db_table = 'model_regulatory'
 
+class Project(models.Model):
+    name = models.CharField(max_length=100)
+    strain = models.CharField(max_length=10)
+    description = models.CharField(max_length=1000, null=True, blank=True)
+    locus_prefix = models.CharField(max_length=10)
+    transcript_suffix_type = models.IntegerField()
+    contig_prefix = models.CharField(max_length=20)
+    date_created = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, related_name='projects', on_delete=models.PROTECT)
+    removed = models.BooleanField(default=False)
+    date_removed = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(User, null=True, blank=True,
+                                   related_name='projects_removed', on_delete=models.PROTECT)    
+
+    def __str__(self):
+        return self.name
+
+    def get_qtd_pending_analysis(self, distinct_feature=False):
+        fields = task_status_utils.get_analysis_fields()
+        features = OrganismFeature.objects.filter(funregulationtools_utils.get_valid_feature_filters(self))
+        features = task_status_utils.get_feature_status_statistic(features)\
+            .filter(task_status_utils.has_analysis_in_progress_filter())
+        if distinct_feature:
+            return features.count()
+
+        aggregations = {}
+        for field in fields:
+            features = features.annotate(**{
+                'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
+                                       default=0, output_field=IntegerField())
+            })
+            aggregations['total_%s' % field] = Sum('qtd_%s' % field)
+        totals = features.aggregate(**aggregations)
+        total = 0
+        for field in fields:
+            t = totals.get('total_%s' % field, 0)
+            if t is None:
+                t = 0
+            total += t
+        return total
+
+    def has_pending_analysis(self):
+        return self.get_qtd_pending_analysis() > 0
+
+    def has_pending_imports(self):
+        return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
+
+    def has_pending_exports(self):
+        return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
 
 class Organism(models.Model):
     accession = models.CharField(primary_key=True, max_length=255)
@@ -47,14 +93,11 @@ class Organism(models.Model):
     strain = models.CharField(max_length=255, blank=True, null=True)
     is_model = models.BooleanField(blank=True, null=True)
     cis_bp = models.BooleanField(blank=True, null=True)
+    removed = models.BooleanField(default=False)
+    #project = models.ForeignKey(Project, related_name='genes', on_delete=models.PROTECT, default='')
 
     def __str__(self):
         return self.accession
-    
-    class Meta:
-        managed = False
-        db_table = 'organism'
-
 
 class Orthology(models.Model):
     model_protein = models.ForeignKey('Protein', models.DO_NOTHING, db_column='model_protein', blank=True, null=True, related_name='protein_model_protein')
@@ -63,7 +106,6 @@ class Orthology(models.Model):
     class Meta:
         managed = False
         db_table = 'orthology'
-
 
 class Promoter(models.Model):
     locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True)
@@ -75,7 +117,6 @@ class Promoter(models.Model):
     class Meta:
         managed = False
         db_table = 'promoter'
-
 
 class Protein(models.Model):
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True, related_name='gene_locus_tag')
@@ -95,7 +136,6 @@ class Protein(models.Model):
         managed = False
         db_table = 'protein'
 
-
 class Pwm(models.Model):
     id = models.CharField(primary_key=True, max_length=255)
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True)
@@ -111,7 +151,6 @@ class Pwm(models.Model):
         managed = False
         db_table = 'pwm'
 
-
 class RegulatoryInteraction(models.Model):
     tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='tf_locus_tag')
     tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='tg_locus_tag')
@@ -121,7 +160,6 @@ class RegulatoryInteraction(models.Model):
     class Meta:
         managed = False
         db_table = 'regulatory_interaction'
-
 
 class Tfbs(models.Model):
     regulatory_interaction = models.ForeignKey(RegulatoryInteraction, models.DO_NOTHING, blank=True, null=True)
@@ -138,63 +176,47 @@ class Tfbs(models.Model):
     class Meta:
         managed = False
         db_table = 'tfbs'
-
-class Project(models.Model):
-    name = models.CharField(max_length=100)
-    strain = models.CharField(max_length=10)
-    description = models.CharField(max_length=1000, null=True, blank=True)
-    locus_prefix = models.CharField(max_length=10)
-    transcript_suffix_type = models.IntegerField()
-    contig_prefix = models.CharField(max_length=20)
-    date_created = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, related_name='projects', on_delete=models.PROTECT)
+    
+class OrganismFeature(models.Model):
+    organism = models.ForeignKey(Organism, related_name='features', on_delete=models.PROTECT)
+    feature_id = models.CharField(null=True, blank=True, max_length=20)
+    feature = models.CharField(null=True, blank=True, max_length=10)
+    last_proteinortho_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
+                                              related_name='last_gene_feature_proteinortho',
+                                              null=True, blank=True, on_delete=models.SET_NULL)
+    last_rsat_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
+                                                  related_name='last_gene_feature_rsat',
+                                                  null=True, blank=True, on_delete=models.SET_NULL)
     removed = models.BooleanField(default=False)
     date_removed = models.DateTimeField(null=True, blank=True)
     removed_by = models.ForeignKey(User, null=True, blank=True,
-                                   related_name='projects_removed', on_delete=models.PROTECT)    
+                                   related_name='features_removed', on_delete=models.PROTECT)
+
+    def has_analysis_in_progress(self):
+        """
+        Return whether this feature has an analysis process in progress.
+        """
+        return self.last_proteinortho_analysis_in_progress or \
+               self.last_rsat_analysis_in_progress
+
+    def has_analysis_with_error(self):
+        """
+        Return whether this feature has an analysis process which returned an error.
+        """
+        return (self.last_proteinortho_registry
+                and not self.last_proteinortho_analysis_in_progress and not self.last_proteinortho_analysis_ok) or \
+               (self.last_rsat_registry
+                and not self.last_rsat_analysis_in_progress and not self.last_rsat_analysis_ok)
 
     def __str__(self):
-        return self.name
-
-    # def get_qtd_pending_analysis(self, distinct_feature=False):
-    #     fields = task_status_utils.get_analysis_fields()
-    #     features = GeneFeature.objects.filter(funregulationtools_utils.get_valid_feature_filters(self))
-    #     features = task_status_utils.get_feature_status_statistic(features)\
-    #         .filter(task_status_utils.has_analysis_in_progress_filter())
-    #     if distinct_feature:
-    #         return features.count()
-
-    #     aggregations = {}
-    #     for field in fields:
-    #         features = features.annotate(**{
-    #             'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
-    #                                    default=0, output_field=IntegerField())
-    #         })
-    #         aggregations['total_%s' % field] = Sum('qtd_%s' % field)
-    #     totals = features.aggregate(**aggregations)
-    #     total = 0
-    #     for field in fields:
-    #         t = totals.get('total_%s' % field, 0)
-    #         if t is None:
-    #             t = 0
-    #         total += t
-    #     return total
-
-    # def has_pending_analysis(self):
-    #     return self.get_qtd_pending_analysis() > 0
-
-    # def has_pending_imports(self):
-    #     return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
-
-    # def has_pending_exports(self):
-    #     return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
-    
+        return self.feature_id
+  
 class ProjectAnalysisRegistry(models.Model):
     project = models.ForeignKey(Project, related_name='analysis_registries', on_delete=models.PROTECT)
     date_created = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, related_name='analysis_registries_created', on_delete=models.PROTECT)
     date_inactive = models.DateTimeField(null=True, blank=True)
-    proteinortho_analyse = models.BooleanField(default=False)
+    proteinortho_analyse = models.BooleanField(default=True)
     rsat_analyse = models.BooleanField(default=False)
     task = models.OneToOneField(TaskResult, null=True, blank=True,
                                 related_name='analysis_registry', on_delete=models.SET_NULL)
@@ -203,8 +225,8 @@ class ProjectAnalysisRegistry(models.Model):
         return str(self.pk)
 
 class ProjectAnalysisRegistryItem(models.Model):
-    registry = models.ForeignKey(ProjectAnalysisRegistry, related_name='items', on_delete=models.PROTECT)
-    #feature = models.ForeignKey(GeneFeature, related_name='analysis_registries_items', on_delete=models.PROTECT)
+    registry = models.ForeignKey(ProjectAnalysisRegistry, related_name='item', on_delete=models.PROTECT)
+    feature = models.ForeignKey(OrganismFeature, related_name='analysis_registries_items', on_delete=models.PROTECT, default='')
     active = models.BooleanField(default=True)
     date_inactive = models.DateTimeField(null=True, blank=True)
     proteinortho_analysed = models.BooleanField(default=False)
@@ -243,45 +265,10 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
-class OrganismFeature(models.Model):
-    organism = models.ForeignKey(Organism, related_name='features', on_delete=models.PROTECT)
-    feature_id = models.CharField(null=True, blank=True, max_length=20)
-    feature = models.CharField(null=True, blank=True, max_length=10)
-    last_proteinortho_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
-                                              related_name='last_gene_feature_proteinortho',
-                                              null=True, blank=True, on_delete=models.SET_NULL)
-    last_rsat_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
-                                                  related_name='last_gene_feature_rsat',
-                                                  null=True, blank=True, on_delete=models.SET_NULL)
-    removed = models.BooleanField(default=False)
-    date_removed = models.DateTimeField(null=True, blank=True)
-    removed_by = models.ForeignKey(User, null=True, blank=True,
-                                   related_name='features_removed', on_delete=models.PROTECT)
-
-    def has_analysis_in_progress(self):
-        """
-        Return whether this feature has an analysis process in progress.
-        """
-        return self.last_proteinortho_analysis_in_progress or \
-               self.last_rsat_analysis_in_progress
-
-    def has_analysis_with_error(self):
-        """
-        Return whether this feature has an analysis process which returned an error.
-        """
-        return (self.last_proteinortho_registry
-                and not self.last_proteinortho_analysis_in_progress and not self.last_proteinortho_analysis_ok) or \
-               (self.last_rsat_registry
-                and not self.last_rsat_analysis_in_progress and not self.last_rsat_analysis_ok)
-
-    def __str__(self):
-        return self.feature_id
-
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         Profile.objects.create(user=instance)
-
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):

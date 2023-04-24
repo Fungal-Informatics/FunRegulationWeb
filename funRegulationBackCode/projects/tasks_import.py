@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 import os.path
 from zipfile import ZipFile
 from celery import shared_task
@@ -24,12 +25,8 @@ def import_genes():
 #@shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
 @shared_task(bind=True, name='import_genes')
 def task_import_genes(self):
-    """
-    Import genes task.
-    """
     organism_accession = "GCA_003184765.1"
-    #organism_accession = "GCA_009193605.1"
-    download_path = '/home/gabriel/Desktop/FunRegulationBack-end/funregulation/FunRegulationWeb/funRegulationBackCode/projects/NCBI_Download/'
+    download_path = settings.NCBI_DOWNLOAD_PATH
     accessions: List[str] = [organism_accession]
     zipfile_name = organism_accession+".zip"
 
