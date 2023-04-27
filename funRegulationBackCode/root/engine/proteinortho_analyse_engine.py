@@ -3,6 +3,8 @@ from django.db import transaction
 from api.models import *
 import urllib.parse
 import os.path
+import pandas as pd
+from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology, construct_grn_orthology
 
 class ProteinOrthoAnalyseEngine:
@@ -12,55 +14,80 @@ class ProteinOrthoAnalyseEngine:
         self.timeout = timeout
 
     def analyse_items(self, organism_accession):
-        model_organism = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/C.faa"
+        # VERIFICAR SE JÁ EXISTE
+        
+        model_organism = str(self.__get_model_organism(organism_accession))
+        # print(model_organism)
+
         target_organism = "/home/gabriel/Downloads/TCC I/Software/ProteinOrtho/proteinortho-master/test/E.faa"
 
         item = ProjectAnalysisRegistryItem.objects.select_related('feature')\
             .filter(feature__organism__accession=organism_accession, active=True,
                     feature__removed=False, feature__organism__removed=False)
-        
-        for organism in item:
-            
-            command = ["perl", self.proteinOrtho_path, model_organism, target_organism]
+                    
+        command = ["perl", self.proteinOrtho_path, model_organism, target_organism]
 
-            if not os.path.exists(self.work_folder):
-                os.makedirs(self.work_folder)
+        if not os.path.exists(self.work_folder):
+            os.makedirs(self.work_folder)
 
-            os.chdir(self.work_folder)
+        os.chdir(self.work_folder)
 
-            proc = Popen(command, stdout=PIPE, stderr=PIPE)
-            #output, error = proc.communicate()
-            proc.communicate()
-            filename = self.work_folder + "/myproject.proteinortho.tsv"
-            ret = proc.returncode
-            if ret != 0:
-                self.__set_error(organism, ProteinOrthoErrorType.COMMAND_ERROR.value)
+        proc = Popen(command, stdout=PIPE, stderr=PIPE)
+        output, error = proc.communicate()
+        #proc.communicate()
+        filename = self.work_folder + "/myproject.proteinortho.tsv"
+        ret = proc.returncode
+        if ret != 0:
+            print(output)
+            print('END OUTPUT')
+            print(error)
+            #self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
+        else:
+            with open(filename) as in_file:
+                for line in in_file:
+                    if line.startswith("#"): continue
+                    line_parts = line.strip().split("\t")
+                    
+                    model = urllib.parse.unquote(line_parts[3])
+                    target = urllib.parse.unquote(line_parts[4])
+                    
+                    model_parts = model.strip().split(",")
+                    target_parts = target.strip().split(",")
+                    
+                    for record_model in model_parts:
+                        for record_target in target_parts:
+                            if (record_model != '*' and record_target != '*'):
+                                model_protein = select_protein_by_id(record_model)
+                                target_protein = select_protein_by_id(record_target)
+                                orthology = Orthology(model_protein,target_protein)
+                                if(orthology != None):
+                                    pass
+                                    #insert_orthology(orthology)
+            in_file.close()
+            #construct_grn_orthology()
+
+    @staticmethod
+    def __get_model_organism(organism_accession):
+        df = pd.read_csv('/home/gabriel/Downloads/TCC I/Software/Database/Database/Ensembl_Species.tsv',sep = '\t')
+
+        order_organism_user = df[['#order']][df['accession'] == organism_accession].squeeze()
+        if(len(order_organism_user) > 0):
+            model_organism = df[(df['#order'] == order_organism_user) & (df['model'] == True)]
+
+            if(len(model_organism) > 0):
+                order_model_organism = model_organism['#order'].squeeze()
+                if(order_model_organism == 'Saccharomycetales'):
+                    return settings.ORGANISM_MODEL_SACCHAROMYCES_CEREVISIAE_PROTEIN_PATH
+                elif(order_model_organism == 'Eurotiales'):
+                    return settings.ORGANISM_MODEL_A_NIDULANS_PROTEIN_PATH
+                elif(order_model_organism == 'Sordariales'):
+                    return settings.ORGANISM_MODEL_NEUROSPORA_CRASSA_PROTEIN_PATH
+                elif(order_model_organism == 'Hypocreales'):
+                    return settings.ORGANISM_MODEL_FUSARIUM_GRAMINEARUM_PROTEIN_PATH
             else:
-                with open(filename) as in_file:
-                    for line in in_file:
-                        if line.startswith("#"): continue
-                        line_parts = line.strip().split("\t")
-                        
-                        model = urllib.parse.unquote(line_parts[3])
-                        target = urllib.parse.unquote(line_parts[4])
-                        
-                        model_parts = model.strip().split(",")
-                        target_parts = target.strip().split(",")
-                        
-                        for record_model in model_parts:
-                            for record_target in target_parts:
-                                if (record_model != '*' and record_target != '*'):
-                                    model_protein = select_protein_by_id(record_model)
-                                    target_protein = select_protein_by_id(record_target)
-                                    orthology = Orthology(model_protein,target_protein)
-                                    if(orthology != None):
-                                        pass
-                                        #insert_orthology(orthology)
-                in_file.close()
-                #construct_grn_orthology()
-
-
-
+                return 'ERROR - NOT FOUND A MODEL ORGARNIM FOR UPLOADED ORGANISM'
+        else:
+            return 'ERROR - NOT FOUND ORGANISM WITH THIS ACCESSION'
 
     @staticmethod
     def __set_error(item, error_type):

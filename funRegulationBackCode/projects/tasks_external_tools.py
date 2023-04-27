@@ -19,21 +19,20 @@ def analyse_registry(registry):
 
 @shared_task(bind=True, name='analyse_registry', base=FunRegulationBaseTask)
 def task_analyse_registry(self, registry_id):
+    organism_accession = "GCA_003184765.3"
     registry = ProjectAnalysisRegistry.objects.get(pk=registry_id)
     with transaction.atomic():
-        for item in registry.items.all().order_by('feature__feature_id'):
-            if registry.proteinortho_analyse:
-                result = task_run_proteinortho.apply_async([], kwargs={'items': [item.pk]}) 
-                registry.task = TaskResult.objects.get(task_id=result.task_id)
-                registry.save()
-                if registry.rsat_analyse:
-                    result = task_run_rsat.apply_async([], kwargs={})
-                    registry.task = TaskResult.objects.get(task_id=result.task_id)
-                    registry.save()
+        if registry.proteinortho_analyse:
+            result = task_run_proteinortho.apply_async([], kwargs={'items': [registry.feature.organism.accession]}) 
+            registry.task_proteinortho = TaskResult.objects.get(task_id=result.task_id)
+
+            if registry.rsat_analyse:
+                result = task_run_rsat.apply_async([], kwargs={})
+                registry.task_rsat = TaskResult.objects.get(task_id=result.task_id)
+        registry.save()
 
 @shared_task(bind=True, name='run_proteinortho', base=FunRegulationBaseTask)
 def task_run_proteinortho(self, organism_accession):
-    #organism_accession = "GCA_003184765.3"
     logging.info('Running proteinOrtho for organism %s' % organism_accession)
     save_path_organism = settings.PROTEINORTHO_SAVE_PATH+organism_accession
     engine = ProteinOrthoAnalyseEngine(proteinOrtho_path=settings.PROTEINORTHO_PATH, work_folder=save_path_organism)
