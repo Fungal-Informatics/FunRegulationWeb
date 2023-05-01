@@ -19,7 +19,6 @@ def analyse_registry(registry):
 
 @shared_task(bind=True, name='analyse_registry', base=FunRegulationBaseTask)
 def task_analyse_registry(self, registry_id):
-    organism_accession = "GCA_003184765.3"
     registry = ProjectAnalysisRegistry.objects.get(pk=registry_id)
     with transaction.atomic():
         if registry.proteinortho_analyse:
