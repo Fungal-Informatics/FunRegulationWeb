@@ -40,7 +40,7 @@ def task_import_genes(self, organism_accession):
             print("Begin download of genome data package ...")
             genome_ds_download = genome_api.download_assembly_package(
                 accessions,
-                include_annotation_type=["PROT_FASTA"],
+                include_annotation_type=["PROT_FASTA", "GENOME_GFF"],
                 _preload_content=False,
             )
 
@@ -51,7 +51,8 @@ def task_import_genes(self, organism_accession):
             os.chdir(work_dir)
             with ZipFile(save_path, 'r') as zip:
                 zip.extract(zip.namelist()[2]) #genome
-                zip.extract(zip.namelist()[3]) #protein
-                zip.extract(zip.namelist()[4]) #sequence
+                zip.extract(zip.namelist()[3]) #GFF3
+                zip.extract(zip.namelist()[4]) #protein
+                zip.extract(zip.namelist()[5]) #sequence
         except DatasetsApiException as e:
             sys.exit(f"Exception when calling download_assembly_package: {e}\n")
