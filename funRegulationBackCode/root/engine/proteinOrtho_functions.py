@@ -7,6 +7,8 @@ import urllib.parse
 from collections import namedtuple
 from Bio import SeqIO
 from django.conf import settings
+from BCBio import GFF
+from time import sleep
 
 upstream = -1000
 downstream = 0
@@ -66,7 +68,7 @@ def select_organism_by_assembly_name(source):
     organism = 0
     try:
         cursor = dbConnection.cursor()
-        postgreSQL_select_Query = "SELECT accession FROM organism WHERE accession = %s"
+        postgreSQL_select_Query = "SELECT accession FROM api_organism WHERE accession = %s"
         cursor.execute(postgreSQL_select_Query, (source,))
         records = cursor.fetchall()
         for row in records:
@@ -82,7 +84,7 @@ def insert_gene(gene):
     try:
         cursor = dbConnection.cursor()
         count = cursor.execute("INSERT INTO gene VALUES (%s, %s, %s, %s, %s)",
-                                                        (gene.organism, 
+                                                        (gene.organism_accession.accession, 
                                                         gene.locus_tag, 
                                                         gene.symbol_gene, 
                                                         gene.description, 
@@ -92,7 +94,7 @@ def insert_gene(gene):
         cursor.close()
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to insert data into TABLE gene", error)
-        lib.log.info(str(gene.organism) + " " +
+        lib.log.info(str(gene.organism_accession.accession) + " " +
                      str(gene.locus_tag) + " " + 
                      str(gene.symbol_gene) + " " +
                      str(gene.description) + " " +
@@ -128,7 +130,7 @@ def gff3_handler(in_file_genes):
     record_list = list()
     for record in parse_gff3_file(in_file_genes):
         record_list.append(record)
-        
+
     pos = 0
     while (pos<len(record_list)):
         record = record_list[pos]
@@ -144,37 +146,95 @@ def gff3_handler(in_file_genes):
                 record.ltype == 'blocked_reading_frame'):
                 #Access attributes like this: my_strand = record.strand
                 #gene = str(record.attributes)
-                locus_tag = record.attributes.get("ID")
-                #locus_tag = record.attributes.get("gene_id")
-                #description = record.attributes.get("description")
-                description = None #record.attributes.get("description")
+                #locus_tag = record.attributes.get("ID")
+                locus_tag = record.attributes.get("gene_id")
+                description = record.attributes.get("description")
+                #description = None #record.attributes.get("description")
                 symbol_gene = ''
                 if record.attributes.get("gene") is not None:
                     symbol_gene = record.attributes.get("gene")
                 is_tf = False
-                print(organism_id,locus_tag,symbol_gene,description,is_tf)
                 gene = Gene(organism_id,locus_tag,symbol_gene,description,is_tf)
-                insert_gene(gene)
+                print(gene)
+                #insert_gene(gene)
 
-                promoter = None
-                if record.strand == '+':
-                    if record.start+upstream > 0 :
-                        promoter = Promoter(locus_tag, record.strand, record.seqid, record.start+upstream, record.start+downstream)
-                    else:
-                        # incomplete promoters
-                        promoter = Promoter(locus_tag, record.strand, record.seqid, 1, record.start+downstream)
-                        lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
-                        promoters_partially_extracted += 1
+                # promoter = None
+                # if record.strand == '+':
+                #     if record.start+upstream > 0 :
+                #         promoter = Promoter(locus_tag, record.strand, record.seqid, record.start+upstream, record.start+downstream)
+                #     else:
+                #         # incomplete promoters
+                #         promoter = Promoter(locus_tag, record.strand, record.seqid, 1, record.start+downstream)
+                #         lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                #         promoters_partially_extracted += 1
+                # else:
+                #     if record.end-source_size <= 0 :
+                #         promoter = Promoter(locus_tag, record.strand, record.seqid, record.end-upstream, record.end-downstream)
+                #     else:
+                #         # incomplete promoters
+                #         promoter = Promoter(locus_tag, record.strand, record.seqid, source_size, record.end-downstream)
+                #         lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                #         promoters_partially_extracted += 1
+                # recordCount += 1
+                #insert_promoter(promoter)
+        pos=pos+1
+    
+    # lib.log.info("%d genes were found" % recordCount)
+    # lib.log.info("Promoters partially identified: %d" % promoters_partially_extracted)
+    # lib.log.info("GFF3 file successfully parsed")
+
+def gff3_handler2(in_file_genes, organism_accession):
+    lib.log.info("Parsing "+ in_file_genes)
+    recordCount = 0
+    promoters_partially_extracted = 0
+    organism_id = 0
+    
+    record_list = list()
+    for record in parse_gff3_file(in_file_genes):
+        record_list.append(record)
+    
+    pos = 0
+    organism_id = organism_accession
+    
+    while (pos<len(record_list)):
+        record = record_list[pos]
+        if record.ltype == 'chromosome' or record.ltype == 'supercontig' or record.ltype == 'region':
+            source_size = record.end
+        elif (record.ltype == 'gene' or record.ltype == 'pseudogene' or 
+              record.ltype == 'transposable_element_gene' or 
+              record.ltype == 'blocked_reading_frame'):
+            #Access attributes like this: my_strand = record.strand
+            #gene = str(record.attributes)
+            locus_tag = record.attributes.get("locus_tag")
+            description = record.attributes.get("product")
+            symbol_gene = ''
+            if record.attributes.get("gene") is not None:
+                symbol_gene = record.attributes.get("gene")
+            is_tf = False
+            
+            gene = Gene(organism_accession=Organism.objects.get(accession=organism_id),locus_tag=locus_tag,symbol_gene=symbol_gene,description=description,is_tf=is_tf)
+            gene.save()
+
+            promoter = None
+            if record.strand == '+':
+                if record.start+upstream > 0 :
+                    promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=record.start+upstream, stop=record.start+downstream)
                 else:
-                    if record.end-source_size <= 0 :
-                        promoter = Promoter(locus_tag, record.strand, record.seqid, record.end-upstream, record.end-downstream)
-                    else:
-                        # incomplete promoters
-                        promoter = Promoter(locus_tag, record.strand, record.seqid, source_size, record.end-downstream)
-                        lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
-                        promoters_partially_extracted += 1
-                recordCount += 1
-                insert_promoter(promoter)
+                    # incomplete promoters
+                    promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=1, stop=record.start+downstream)
+                    lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                    promoters_partially_extracted += 1
+            else:
+                if record.end-source_size <= 0 :
+                    promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=record.end-upstream, stop=record.end-downstream)
+                else:
+                    # incomplete promoters
+                    promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=source_size, stop=record.end-downstream)
+                    lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                    promoters_partially_extracted += 1
+            recordCount += 1
+            
+            promoter.save()
         pos=pos+1
     
     lib.log.info("%d genes were found" % recordCount)
@@ -208,36 +268,40 @@ def insert_protein(protein):
                     str(protein.id))
 
 def parse_protein_file(in_file_proteins):
-    print(in_file_proteins)
     lib.log.info("Parsing "+ in_file_proteins)
     for rec in SeqIO.parse(in_file_proteins, 'fasta'):
-        
         #when locus_tag != protein_id
         #rec.description = re.search(r'gene:(.*?) transcript:', rec.description).group(1)
-        protein = Protein(rec.description, rec.id,'','','','','','','','','','')
+        locus_tag = rec.description.split()[3].strip()
         
-        #print(protein)
         #when locus_tag == protein_id
         #protein = Protein(rec.id, rec.id,'','','','','','','','','','')
-        #print(protein.locus_tag, protein.id)
-        insert_protein(protein)
-
+        protein = Protein(locus_tag=Gene.objects.get(locus_tag=locus_tag), id=rec.id,interpro='',pfam='',go='',gene3d='',reactome='',panther='',uniprot='',kegg_enzyme='',cazy='',uniparc='')
+        protein.save()
+        
 def select_protein_by_id(protein_id):
-    dbConnection = create_db_connection()
-    protein = None
-    try:
-        cursor = dbConnection.cursor()
-        postgreSQL_select_Query = "SELECT * FROM protein WHERE id = %s"
-        cursor.execute(postgreSQL_select_Query, (protein_id,))
-        rec = cursor.fetchall()
-        for row in rec:
-            protein = Protein(row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11])
-            return protein
-        cursor.close()
-    except (Exception, psycopg2.Error) as error:
-        lib.log.info("Failed to execute the select into table protein", error)
-        #lib.log.info(source)
-        lib.log.info(protein_id)
+    protein = Protein.objects.filter(id=protein_id).values('locus_tag')
+    
+    if(len(protein) > 0):
+        for locus_tag_value in protein:
+            locus_tag = locus_tag_value['locus_tag']
+
+    return locus_tag
+    # dbConnection = create_db_connection()
+    # protein = None
+    # try:
+    #     cursor = dbConnection.cursor()
+    #     postgreSQL_select_Query = "SELECT * FROM protein WHERE id = %s"
+    #     cursor.execute(postgreSQL_select_Query, (protein_id,))
+    #     rec = cursor.fetchall()
+    #     for row in rec:
+    #         protein = Protein(row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[10],row[11])
+    #         return protein
+    #     cursor.close()
+    # except (Exception, psycopg2.Error) as error:
+    #     lib.log.info("Failed to execute the select into table protein", error)
+    #     #lib.log.info(source)
+    #     lib.log.info(protein_id)
 
 def insert_orthology(orthology):
     dbConnection = create_db_connection()

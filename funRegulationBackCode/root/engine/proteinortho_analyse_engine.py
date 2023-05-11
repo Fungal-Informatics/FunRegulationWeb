@@ -5,7 +5,8 @@ import urllib.parse
 import os.path
 from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology, construct_grn_orthology
-from root.engine.proteinOrtho_functions import parse_protein_file, gff3_handler
+from root.engine.proteinOrtho_functions import parse_protein_file, gff3_handler, gff3_handler2
+from time import sleep
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
@@ -14,61 +15,62 @@ class ProteinOrthoAnalyseEngine:
         self.timeout = timeout
 
     def analyse_items(self, organism_accession):
-        # VERIFICAR SE JÁ EXISTE
         model_organism = self.__get_model_organism(organism_accession)
         target_organism_protein_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/protein.faa"
         target_organism_gff_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/genomic.gff"
 
-        print(model_organism)
         # item = ProjectAnalysisRegistryItem.objects.select_related('feature')\
         #     .filter(feature__organism__accession=organism_accession, active=True,
         #             feature__removed=False, feature__organism__removed=False)
                     
         command = ["perl", self.proteinOrtho_path, model_organism, target_organism_protein_file]
 
-        # if not os.path.exists(self.work_folder+"/proteinOrtho"):
-        #     gff3_handler(target_organism_gff_file)
-        #     parse_protein_file(target_organism_protein_file)
-        #     os.makedirs(self.work_folder+"/proteinOrtho")
+        if not os.path.exists(self.work_folder+"/proteinOrtho"):
+            #gff3_handler2(target_organism_gff_file, organism_accession)
+            #parse_protein_file(target_organism_protein_file)
+            os.makedirs(self.work_folder+"/proteinOrtho")
 
-        # os.chdir(self.work_folder+"/proteinOrtho")
+        os.chdir(self.work_folder+"/proteinOrtho")
 
-        # proc = Popen(command, stdout=PIPE, stderr=PIPE)
-        # output, error = proc.communicate()
-        # proc.communicate()
-        # filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
-        # ret = proc.returncode
-        # if ret != 0:
-        #     print(output)
-        #     print('END OUTPUT')
-        #     print(error)
-        #     #self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
-        # else:
-        #     with open(filename) as in_file:
-        #         for line in in_file:
-        #             if line.startswith("#"): 
-        #                 continue
-        #             line_parts = line.strip().split("\t")
+        proc = Popen(command, stdout=PIPE, stderr=PIPE)
+        output, error = proc.communicate()
+        proc.communicate()
+
+        filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
+        ret = proc.returncode
+        if ret != 0:
+            print(output)
+            print('END OUTPUT')
+            print(error)
+            #self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
+        else:
+            with open(filename) as in_file:
+                for line in in_file:
+                    if line.startswith("#"): 
+                        continue
+                    line_parts = line.strip().split("\t")
                     
-        #             model = urllib.parse.unquote(line_parts[3])
-        #             target = urllib.parse.unquote(line_parts[4])
+                    model = urllib.parse.unquote(line_parts[3])
+                    target = urllib.parse.unquote(line_parts[4])
                     
-        #             model_parts = model.strip().split(",")
-        #             target_parts = target.strip().split(",")
+                    model_parts = model.strip().split(",")
+                    target_parts = target.strip().split(",")
 
-        #             for record_model in model_parts:
-        #                 for record_target in target_parts:
-        #                     if (record_model != '*' and record_target != '*'):
-        #                         model_protein = select_protein_by_id(record_model)
-        #                         target_protein = select_protein_by_id(record_target)
-        #                         print(target_protein)
-                                # orthology = Orthology(model_protein,target_protein)
-                                # if(orthology != None):
-                                #     print(orthology)
-                                #     print(orthology.target_protein)
-                                    #insert_orthology(orthology)
-            #in_file.close()
-            #construct_grn_orthology()
+                    for record_model in model_parts:
+                        for record_target in target_parts:
+                            if (record_model != '*' and record_target != '*'):
+                                model_protein = select_protein_by_id(record_model)
+                                target_protein = select_protein_by_id(record_target)
+                                #sleep(5)
+                                orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
+                                #orthology = None
+
+                                if(orthology != None):
+                                    pass
+                                    #orthology.save()
+
+            in_file.close()
+            construct_grn_orthology()
 
     @staticmethod
     def __get_model_organism(organism_accession):

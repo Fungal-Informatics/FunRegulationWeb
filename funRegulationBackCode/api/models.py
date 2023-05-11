@@ -99,25 +99,6 @@ class Organism(models.Model):
     def __str__(self):
         return self.accession
 
-class Orthology(models.Model):
-    model_protein = models.ForeignKey('Protein', models.DO_NOTHING, db_column='model_protein', blank=True, null=True, related_name='protein_model_protein')
-    target_protein = models.ForeignKey('Protein', models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='protein_target_protein')
-
-    class Meta:
-        managed = False
-        db_table = 'orthology'
-
-class Promoter(models.Model):
-    locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True)
-    strand = models.CharField(max_length=1, blank=True, null=True)
-    source = models.CharField(max_length=255, blank=True, null=True)
-    start = models.IntegerField(blank=True, null=True)
-    stop = models.IntegerField(blank=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = 'promoter'
-
 class Protein(models.Model):
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True, related_name='gene_locus_tag')
     id = models.CharField(primary_key=True, max_length=255)
@@ -135,6 +116,25 @@ class Protein(models.Model):
     class Meta:
         managed = False
         db_table = 'protein'
+
+class Orthology(models.Model):
+    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, null=True, related_name='protein_model_protein', primary_key=True)
+    target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='protein_target_protein')
+
+    class Meta:
+        managed = False
+        db_table = 'orthology'
+
+class Promoter(models.Model):
+    locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, primary_key=True)
+    strand = models.CharField(max_length=1, blank=True, null=True)
+    source = models.CharField(max_length=255, blank=True, null=True)
+    start = models.IntegerField(blank=True, null=True)
+    stop = models.IntegerField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'promoter'
 
 class Pwm(models.Model):
     id = models.CharField(primary_key=True, max_length=255)
