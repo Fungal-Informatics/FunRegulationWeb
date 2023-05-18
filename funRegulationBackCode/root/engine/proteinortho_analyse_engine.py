@@ -5,7 +5,7 @@ import urllib.parse
 import os.path
 from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology, construct_grn_orthology
-from root.engine.proteinOrtho_functions import parse_protein_file, gff3_handler, gff3_handler2
+from root.engine.proteinOrtho_functions import gbff_handler
 from time import sleep
 
 class ProteinOrthoAnalyseEngine:
@@ -15,19 +15,19 @@ class ProteinOrthoAnalyseEngine:
         self.timeout = timeout
 
     def analyse_items(self, organism_accession):
+        model_organism = []
         model_organism = self.__get_model_organism(organism_accession)
         target_organism_protein_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/protein.faa"
-        target_organism_gff_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/genomic.gff"
+        target_organism_gbff_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/genomic.gbff"
 
         # item = ProjectAnalysisRegistryItem.objects.select_related('feature')\
         #     .filter(feature__organism__accession=organism_accession, active=True,
         #             feature__removed=False, feature__organism__removed=False)
                     
-        command = ["perl", self.proteinOrtho_path, model_organism, target_organism_protein_file]
+        command = ["perl", self.proteinOrtho_path, model_organism[0], target_organism_protein_file]
 
         if not os.path.exists(self.work_folder+"/proteinOrtho"):
-            #gff3_handler2(target_organism_gff_file, organism_accession)
-            #parse_protein_file(target_organism_protein_file)
+            gbff_handler(organism_accession, target_organism_gbff_file)
             os.makedirs(self.work_folder+"/proteinOrtho")
 
         os.chdir(self.work_folder+"/proteinOrtho")
@@ -61,19 +61,19 @@ class ProteinOrthoAnalyseEngine:
                             if (record_model != '*' and record_target != '*'):
                                 model_protein = select_protein_by_id(record_model)
                                 target_protein = select_protein_by_id(record_target)
-                                #sleep(5)
                                 orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
-                                #orthology = None
 
                                 if(orthology != None):
-                                    pass
-                                    #orthology.save()
+                                    orthology.save()
 
             in_file.close()
-            construct_grn_orthology()
+            construct_grn_orthology(model_organism[1], organism_accession)
+        
+
 
     @staticmethod
     def __get_model_organism(organism_accession):
+        results = []
         order_organism_user = Organism.objects.filter(accession=organism_accession).values('order')
 
         if(len(order_organism_user) > 0):
@@ -87,13 +87,18 @@ class ProteinOrthoAnalyseEngine:
                     order_model = order_model_value['order']
                 
                 if(order_model == 'Saccharomycetales'):
-                    return settings.ORGANISM_MODEL_SACCHAROMYCES_CEREVISIAE_PROTEIN_PATH
+                    results.append(settings.ORGANISM_MODEL_SACCHAROMYCES_CEREVISIAE_PROTEIN_PATH)
+                    results.append('R64-3-1-SGD') 
                 elif(order_model == 'Eurotiales'):
-                    return settings.ORGANISM_MODEL_A_NIDULANS_PROTEIN_PATH
+                    results.append(settings.ORGANISM_MODEL_A_NIDULANS_PROTEIN_PATH)
+                    results.append('s10-m04-r16-AspGD') 
                 elif(order_model == 'Sordariales'):
-                    return settings.ORGANISM_MODEL_NEUROSPORA_CRASSA_PROTEIN_PATH
+                    results.append(settings.ORGANISM_MODEL_NEUROSPORA_CRASSA_PROTEIN_PATH)
+                    results.append('GCA_000182925.2') 
                 elif(order_model == 'Hypocreales'):
-                    return settings.ORGANISM_MODEL_FUSARIUM_GRAMINEARUM_PROTEIN_PATH
+                    results.append(settings.ORGANISM_MODEL_FUSARIUM_GRAMINEARUM_PROTEIN_PATH)
+                    results.append('GCA_000240135.3')
+                return results
             else:
                 return 'ERROR - NOT FOUND A MODEL ORGANISM FOR UPLOADED ORGANISM'
         else:

@@ -102,6 +102,7 @@ class Organism(models.Model):
 class Protein(models.Model):
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True, related_name='gene_locus_tag')
     id = models.CharField(primary_key=True, max_length=255)
+    product = models.CharField(max_length=255, blank=True, null=True)
     interpro = models.CharField(max_length=255, blank=True, null=True)
     pfam = models.CharField(max_length=255, blank=True, null=True)
     go = models.CharField(max_length=255, blank=True, null=True)
@@ -109,7 +110,7 @@ class Protein(models.Model):
     reactome = models.CharField(max_length=255, blank=True, null=True)
     panther = models.CharField(max_length=255, blank=True, null=True)
     uniprot = models.CharField(max_length=255, blank=True, null=True)
-    kegg_enzyme = models.CharField(max_length=255, blank=True, null=True)
+    ec_number = models.CharField(max_length=255, blank=True, null=True)
     cazy = models.CharField(max_length=255, blank=True, null=True)
     uniparc = models.CharField(max_length=255, blank=True, null=True)
 
@@ -118,7 +119,7 @@ class Protein(models.Model):
         db_table = 'protein'
 
 class Orthology(models.Model):
-    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, null=True, related_name='protein_model_protein', primary_key=True)
+    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, related_name='protein_model_protein', primary_key=True)
     target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='protein_target_protein')
 
     class Meta:
@@ -131,10 +132,7 @@ class Promoter(models.Model):
     source = models.CharField(max_length=255, blank=True, null=True)
     start = models.IntegerField(blank=True, null=True)
     stop = models.IntegerField(blank=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = 'promoter'
+    promoter_seq = models.CharField(max_length=255, blank=True, null=True)
 
 class Pwm(models.Model):
     id = models.CharField(primary_key=True, max_length=255)

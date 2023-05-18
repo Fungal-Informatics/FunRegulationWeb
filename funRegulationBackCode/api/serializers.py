@@ -1,6 +1,5 @@
 from rest_framework import serializers
-#from root.modelsLenz.models import Organism
-from .models import Organism
+from .models import Organism, RegulatoryInteraction
 
 class OrganismSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,4 +12,15 @@ class OrganismSerializer(serializers.ModelSerializer):
             'strain',
             'is_model',
             'cis_bp'
+        ]
+
+class RegulatoryInteractionSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = RegulatoryInteraction
+        fields = [
+            'tf_locus_tag',
+            'tg_locus_tag',
+            'regulatory_function',
+            'pubmedid_source'
         ]
