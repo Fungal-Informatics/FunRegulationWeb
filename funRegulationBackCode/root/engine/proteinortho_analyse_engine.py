@@ -4,9 +4,7 @@ from api.models import *
 import urllib.parse
 import os.path
 from django.conf import settings
-from root.engine.proteinOrtho_functions import select_protein_by_id, insert_orthology, construct_grn_orthology
-from root.engine.proteinOrtho_functions import gbff_handler
-from time import sleep
+from root.engine.proteinOrtho_functions import select_protein_by_id, gbff_handler, construct_grn_orthology
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):

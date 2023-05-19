@@ -135,7 +135,6 @@ class Promoter(models.Model):
     promoter_seq = models.CharField(max_length=255, blank=True, null=True)
 
 class Pwm(models.Model):
-    id = models.CharField(primary_key=True, max_length=255)
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True)
     motif_id = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=1, blank=True, null=True)
