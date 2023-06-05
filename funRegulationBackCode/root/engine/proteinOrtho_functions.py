@@ -476,8 +476,6 @@ def gbff_handler(assembly_accession, in_file_target_genome):
                         promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=len(seq_record), stop=myend-downstream, promoter_seq=promoter_seq)
                         lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                         promoters_partially_extracted += 1
-                #print(strand)
-                #sleep(3)
                 promoter.save()
                 
             #Insert Proteins

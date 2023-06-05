@@ -14,7 +14,7 @@ class Gene(models.Model):
     organism_accession = models.ForeignKey('Organism', models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='org_accession')
     locus_tag = models.CharField(primary_key=True, max_length=255, db_column='locus_tag')
     symbol_gene = models.CharField(max_length=255, blank=True, null=True)
-    description = models.CharField(max_length=500, blank=True, null=True)
+    #description = models.CharField(max_length=500, blank=True, null=True)
     is_tf = models.BooleanField(blank=True, null=True)
 
     class Meta:
