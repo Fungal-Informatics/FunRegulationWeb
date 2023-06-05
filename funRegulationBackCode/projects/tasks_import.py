@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 import os.path
 from zipfile import ZipFile
 from celery import shared_task
@@ -15,21 +16,16 @@ from ncbi.datasets.metadata.genome import get_assembly_metadata_by_bioproject_ac
 
 from ncbi.datasets.package import dataset
 
-def import_genes():
-    #result = task_import_genes.apply_async((import_registry.pk,))
-    result = task_import_genes.delay()
-    #import_registry.task = TaskResult.objects.get(task_id=result.task_id)
-    #import_registry.save()
+def import_genes(import_registry):
+    #if import_registry is None or type(import_registry) is not GeneImportRegistry:
+    #    raise ValueError('registry should be an instance of GeneImportRegistry')
+    result = task_import_genes.apply_async((import_registry.pk,))
+    import_registry.task = TaskResult.objects.get(task_id=result.task_id)
+    import_registry.save()
 
-#@shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
-@shared_task(bind=True, name='import_genes')
-def task_import_genes(self):
-    """
-    Import genes task.
-    """
-    organism_accession = "GCA_003184765.1"
-    #organism_accession = "GCA_009193605.1"
-    download_path = '/home/gabriel/Desktop/FunRegulationBack-end/funregulation/FunRegulationWeb/funRegulationBackCode/projects/NCBI_Download/'
+@shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
+def task_import_genes(self, organism_accession):
+    download_path = settings.NCBI_DOWNLOAD_PATH
     accessions: List[str] = [organism_accession]
     zipfile_name = organism_accession+".zip"
 
@@ -44,7 +40,7 @@ def task_import_genes(self):
             print("Begin download of genome data package ...")
             genome_ds_download = genome_api.download_assembly_package(
                 accessions,
-                include_annotation_type=["PROT_FASTA"],
+                include_annotation_type=["PROT_FASTA", "GENOME_GFF"],
                 _preload_content=False,
             )
 
@@ -55,7 +51,8 @@ def task_import_genes(self):
             os.chdir(work_dir)
             with ZipFile(save_path, 'r') as zip:
                 zip.extract(zip.namelist()[2]) #genome
-                zip.extract(zip.namelist()[3]) #protein
-                zip.extract(zip.namelist()[4]) #sequence
+                zip.extract(zip.namelist()[3]) #GFF3
+                zip.extract(zip.namelist()[4]) #protein
+                zip.extract(zip.namelist()[5]) #sequence
         except DatasetsApiException as e:
             sys.exit(f"Exception when calling download_assembly_package: {e}\n")
