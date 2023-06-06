@@ -40,7 +40,6 @@ def task_run_proteinortho(self, organism_accession):
     
 @shared_task(bind=True, name='run_rsat', base=FunRegulationBaseTask)
 def task_run_rsat(self, organism_accession):
-    #organism_accession = "GCA_000965225.2"
     logging.info('Running RSAT for organism %s' % organism_accession)
     engine = RsatAnalyseEngine(work_folder=settings.RSAT_SAVE_PATH+organism_accession, pwms_folder=settings.PWMS_FILES_PATH)
     engine.analyse_items(organism_accession)
