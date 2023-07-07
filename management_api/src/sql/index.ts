@@ -1,1 +1,0 @@
-import { tasks } from "./task";import { boards } from "./board";import { users } from "./users";export const QUERY = {	tasks,	boards,	users,};

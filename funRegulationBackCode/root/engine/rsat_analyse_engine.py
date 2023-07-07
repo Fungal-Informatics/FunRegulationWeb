@@ -9,21 +9,19 @@ import root.lib.library as lib
 from Bio import SeqIO
 
 class RsatAnalyseEngine:
-    def __init__(self, work_folder=None, pwms_folder = None, timeout=None):
+    def __init__(self, work_folder=None, pwms_folder=None, timeout=None):
         self.work_folder = work_folder
         self.pwms_folder = pwms_folder
         self.timeout = timeout
 
     def analyse_items(self, organism_accession):
+        # $RSAT/perl-scripts/matrix-scan -v 1 -quick -matrix_format transfac -m $RSAT/public_html/tmp/apache/2023/06/06/matrix-scan_2023-06-06.034929_rcdCPQ.matrix -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -lth score 1 -i $RSAT/public_html/tmp/apache/2023/06/06/tmp_sequence_2023-06-06.034929_snSaH7.fasta -seq_format fasta -n score 
+        # $RSAT/perl-scripts/matrix-scan -v 1 -matrix_format transfac -m $RSAT/public_html/tmp/apache/2023/06/06/matrix-scan_2023-06-06.034658_lxFc3q.matrix -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1  -uth pval 1e-4  -i $RSAT/public_html/tmp/apache/2023/06/06/tmp_sequence_2023-06-06.034658_jf1KPB.fasta -seq_format fasta -n score
         tf_list = list()
         pwm_list = list()
         regulatory_interactions_list = list()
         prediction_list = list()
         target_pwm_file = settings.TARGET_PWMS_FILES_PATH+organism_accession+'/TF_Information.txt'
-        out_folder = self.work_folder+'/Rsat_results/tfbs_predictions/'
-
-        if not os.path.exists(out_folder):
-            os.makedirs(out_folder)
 
         if os.path.exists(target_pwm_file):
             parse_pwm_file(target_pwm_file)
@@ -42,12 +40,13 @@ class RsatAnalyseEngine:
                             prediction_list.append(prediction)
                             promoter = select_promoter_by_locus_tag(regulatory_interaction.tg_locus_tag.locus_tag)
                             promoter_sequence = ">" + regulatory_interaction.tg_locus_tag.locus_tag + "\n" + promoter.promoter_seq
-                            test_file = '/home/gabriel/Desktop/FunRegulationBack-end/FunRegulationAPI/funRegulationBackCode/projects/Organisms/test.txt'
-                            with open(test_file, 'w') as f:
+                            temp_file = self.work_folder+"/test.txt"
+
+                            with open(temp_file, 'w') as f:
                                 for line in promoter_sequence:
                                     f.write(line)
                             
-                            ## Prepare matrix
+                            # Prepare matrix
                             in_matrix = self.pwms_folder + pwm.motif_id + ".txt"
                             
                             # Input matrix (file content)
@@ -58,7 +57,7 @@ class RsatAnalyseEngine:
                                 lib.log.info("Null Matrix: " + pwm.motif_id)
                             else:
                                 #cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-4 -i "+promoter_sequence+" -seq_format fasta -n score"
-                                cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-2 -i "+test_file+" -seq_format fasta -n score"
+                                cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-2 -i "+temp_file+" -seq_format fasta -n score"
                                 #cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-2 -sequence "+promoter_sequence+" -seq_format fasta -n score"
                 
                                 rsat_call = Popen(cmd, shell=True,stdout=PIPE,stderr=PIPE)
@@ -70,7 +69,7 @@ class RsatAnalyseEngine:
                                     result = str(out)
 
                                     parts = result.strip().split("\\t")
-                                    #Create new TFBS prediction for each RSAT prediction result
+                                    # Create new TFBS prediction for each RSAT prediction result
                                     strand = urllib.parse.unquote(parts[76])
                                     start = urllib.parse.unquote(parts[77])
                                     end = urllib.parse.unquote(parts[78])
@@ -83,7 +82,7 @@ class RsatAnalyseEngine:
                                     tfbs = Tfbs(regulatory_interaction=RegulatoryInteraction.objects.get(pk=regulatory_interaction.id),
                                                 pwm=Pwm.objects.get(pk=pwm.id), strand = strand, start = start, end = end, 
                                                 sequence = sequence, weight = weight, pval = pval, ln_pval = ln_pval, sig = sig)
-                                    tfbs.save()
+                                    #tfbs.save()
                         else:
                             lib.log.info("TFBS Prediction File already exists: " +regulatory_interaction.tf_locus_tag.locus_tag+"-"+regulatory_interaction.tg_locus_tag.locus_tag+"-"+pwm.motif_id+ ".txt")
         else:

@@ -1,5 +1,0 @@
-type Metadata {
-    createdAt: datetime
-    updatedAt: datetime
-    isArchived: bool
-}

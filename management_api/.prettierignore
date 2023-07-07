@@ -1,5 +1,0 @@
-node_modules
-dist
-compiled
-src/zapatos
-src/sql/elaborated.query.ts

@@ -44,23 +44,13 @@ def parse_pwm_file(in_file_pwm):
     lib.log.info(in_file_pwm + " parsed correctly")
 
 def select_tfs_by_organism(organism_accession):
-    genes = []
-    genes = Gene.objects.filter(is_tf=True).filter(organism_accession=organism_accession)
-    return genes
-    # dbConnection = create_db_connection()
-    # tf_list = list()
-    # try:
-    #     cursor = dbConnection.cursor()
-    #     cursor.execute("SELECT * from gene WHERE is_tf = 'True' and organism_accession = %s", (organism_accession,))
-    #     rec = cursor.fetchall()
-    #     #queryset = Gene.objects.filter(is_tf = 'true').filter(organism_accession = organism_accession)
-    #     for row in rec:
-    #         tf_list.append(Gene(row[0],row[1],row[2],row[3],row[4]))
-    #     cursor.close()
-    #     return tf_list
-    # except (Exception, psycopg2.Error) as error:
-    #     lib.log.info("Failed to execute the select into table gene", error)
-    #     lib.log.info(organism_accession)
+    genes = list()
+    try:
+        genes = Gene.objects.filter(is_tf=True).filter(organism_accession=organism_accession)
+        return genes
+    except(Exception) as error:
+        lib.log.info("Failed to execute the select into table Gene", error)
+        lib.log.info(organism_accession)
 
 def select_pwms_by_locus_tag(locus_tag):
     pwms = list()
@@ -105,33 +95,12 @@ def extract_promoter(genome, tg_locus_tag):
     # return short_seq_record
 
 def select_promoter_by_locus_tag(tg_locus_tag):
-    promoter = Promoter.objects.get(locus_tag=tg_locus_tag)
-    return promoter
-
-def insert_tfbs_prediction(tfbs):
-    dbConnection = create_db_connection()
     try:
-        cursor = dbConnection.cursor()
-        count = cursor.execute("INSERT INTO tfbs VALUES (default, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                                                            (tfbs.regulatory_interaction_id, 
-                                                            tfbs.pwm_id, 
-                                                            tfbs.strand, 
-                                                            tfbs.start, 
-                                                            tfbs.end, 
-                                                            tfbs.sequence, 
-                                                            tfbs.weight, 
-                                                            tfbs.pval, 
-                                                            tfbs.ln_pval, 
-                                                            tfbs.sig))
-        dbConnection.commit()
-        lib.log.info("Record inserted successfully into TABLE tfbs")
-        cursor.close()
-    except (Exception, psycopg2.Error) as error:
-        lib.log.info("Failed to insert data into TABLE tfbs ")
-        lib.log.info(str(tfbs.regulatory_interaction_id) + " " +
-                    str(tfbs.pwm_id) + " " + 
-                    str(tfbs.strand) + " " +
-                    str(tfbs.sequence))
+        promoter = Promoter.objects.get(locus_tag=tg_locus_tag)
+        return promoter
+    except(Exception) as error:
+        lib.log.info("Failed to execute the select into table Promoter", error)
+        lib.log.info(tg_locus_tag)
         
 def create_db_connection():
     try:
