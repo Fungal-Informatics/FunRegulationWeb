@@ -1,1 +1,0 @@
-import { tasks } from "./task";import { boards } from "./board";import { users } from "./user";export const LOGIC = {	tasks,	boards,	users,};

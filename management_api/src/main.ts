@@ -1,1 +1,0 @@
-import "./config/env-vars";import { runHttpServer } from "./config/http-server";import { runMigrations } from "./config/migration";async function initiateServer() {	await runMigrations();	runHttpServer();}initiateServer();
