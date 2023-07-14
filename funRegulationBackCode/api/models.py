@@ -127,7 +127,7 @@ class Orthology(models.Model):
         db_table = 'orthology'
 
 class Promoter(models.Model):
-    locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, primary_key=True)
+    locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, primary_key=True, default='')
     strand = models.CharField(max_length=1, blank=True, null=True)
     source = models.CharField(max_length=255, blank=True, null=True)
     start = models.IntegerField(blank=True, null=True)
@@ -213,6 +213,7 @@ class ProjectAnalysisRegistry(models.Model):
     date_created = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, related_name='analysis_registries_created', on_delete=models.PROTECT)
     date_inactive = models.DateTimeField(null=True, blank=True)
+    organism_accession = models.CharField(max_length=100, null=False, default="vazio")
     proteinortho_analyse = models.BooleanField(default=True)
     rsat_analyse = models.BooleanField(default=False)
     task = models.OneToOneField(TaskResult, null=True, blank=True,
@@ -254,6 +255,8 @@ class SystemPreferenceType(enum.Enum):
 class Profile(models.Model):
     user = models.OneToOneField(User, related_name='profile', on_delete=models.PROTECT)
     organization = models.CharField(max_length=200, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
+    BrazilianState = models.CharField(max_length=2, null=True, blank=True)
     is_admin = models.BooleanField(default=False)
     account_confirmation = models.BooleanField(default=False)
     account_confirmation_date = models.DateTimeField(null=True, blank=True)
@@ -262,11 +265,11 @@ class Profile(models.Model):
     def __str__(self):
         return self.user.username
 
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        Profile.objects.create(user=instance)
+# @receiver(post_save, sender=User)
+# def create_user_profile(sender, instance, created, **kwargs):
+#     if created:
+#         Profile.objects.create(user=instance)
 
-@receiver(post_save, sender=User)
-def save_user_profile(sender, instance, **kwargs):
-    instance.profile.save()
+# @receiver(post_save, sender=User)
+# def save_user_profile(sender, instance, **kwargs):
+#     instance.profile.save()

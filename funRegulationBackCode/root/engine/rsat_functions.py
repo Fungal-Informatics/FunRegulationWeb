@@ -62,15 +62,9 @@ def select_pwms_by_locus_tag(locus_tag):
         lib.log.info(locus_tag)
 
 def select_regulatory_interactions_by_tf_locus_tag(tf_locus_tag):
-    dbConnection = create_db_connection()
     regulatory_interactions = list()
     try:
-        cursor = dbConnection.cursor()
-        cursor.execute("SELECT * from regulatory_interaction WHERE tf_locus_tag = %s", (tf_locus_tag,))
-        rec = cursor.fetchall()
-        for row in rec:
-            regulatory_interactions.append(RegulatoryInteraction(row[0],row[1],row[2],row[3],row[4]))
-        cursor.close()
+        regulatory_interactions = RegulatoryInteraction.objects.filter(tf_locus_tag=tf_locus_tag)
         return regulatory_interactions
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to execute the select into table regulatory_interaction", error)
