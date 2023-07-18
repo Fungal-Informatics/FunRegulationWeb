@@ -15,7 +15,6 @@ class OrganismSerializer(serializers.ModelSerializer):
         ]
 
 class RegulatoryInteractionSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = RegulatoryInteraction
         fields = [
@@ -34,10 +33,10 @@ class ProjectAnalysisRegistrySerializer(serializers.ModelSerializer):
         ]
 
 class UserSerializer(serializers.Serializer):
-    firstName = serializers.CharField(max_length=30)
-    lastName = serializers.CharField(max_length=150)
-    email = serializers.EmailField()
-    organization = serializers.CharField(max_length=200)
-    password = serializers.CharField(max_length=20)
-    country = serializers.CharField(max_length=100)
-    brazilianState = serializers.CharField(max_length=2)
+    firstName = serializers.CharField(max_length=30,required=True, allow_blank=False, allow_null=False)
+    lastName = serializers.CharField(max_length=150,required=True, allow_blank=False, allow_null=False)
+    email = serializers.EmailField(required=True, allow_blank=False, allow_null=False)
+    organization = serializers.CharField(max_length=200,required=True, allow_blank=False, allow_null=False)
+    password = serializers.CharField(max_length=20,required=True, allow_blank=False, allow_null=False)
+    country = serializers.CharField(max_length=100,required=True, allow_blank=False, allow_null=False)
+    brazilianState = serializers.CharField(max_length=2,required=False, allow_blank=True, allow_null=True)

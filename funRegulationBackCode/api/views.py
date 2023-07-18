@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.db import DatabaseError, transaction
-from .models import Organism, RegulatoryInteraction, Profile
+from .models import Organism, RegulatoryInteraction, Profile, Gene
 from django.contrib.auth.models import User
 
 class OrganismViewSet(mixins.ListModelMixin,viewsets.GenericViewSet):
@@ -17,9 +17,17 @@ class OrganismViewSet(mixins.ListModelMixin,viewsets.GenericViewSet):
     permission_classes = [permissions.AllowAny]
 
 class RegulatoryInteractionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = RegulatoryInteraction.objects.all()[:8]
     serializer_class = RegulatoryInteractionSerializer
     permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        accession = self.request.query_params.get('organism_accession')
+        queryset = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+            .filter(tf_locus_tag__organism_accession=accession)\
+            .distinct('tf_locus_tag','tg_locus_tag')\
+            .order_by('tf_locus_tag','tg_locus_tag')
+        return queryset
+
 
 class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def post(self, request, format=None):
