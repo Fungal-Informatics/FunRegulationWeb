@@ -40,3 +40,8 @@ class UserSerializer(serializers.Serializer):
     password = serializers.CharField(max_length=20,required=True, allow_blank=False, allow_null=False)
     country = serializers.CharField(max_length=100,required=True, allow_blank=False, allow_null=False)
     brazilianState = serializers.CharField(max_length=2,required=False, allow_blank=True, allow_null=True)
+
+class TestingSerializer(serializers.Serializer):
+    tf_locus_tag = serializers.ListField()
+    tg_locus_tag = serializers.ListField()
+    connections = serializers.ListField()
