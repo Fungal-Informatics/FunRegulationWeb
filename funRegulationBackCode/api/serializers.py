@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile
+from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile, User
 
 class OrganismSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,7 +32,7 @@ class ProjectAnalysisRegistrySerializer(serializers.ModelSerializer):
             'rsat_analyse'
         ]
 
-class UserSerializer(serializers.Serializer):
+class CreateUserSerializer(serializers.Serializer):
     firstName = serializers.CharField(max_length=30,required=True, allow_blank=False, allow_null=False)
     lastName = serializers.CharField(max_length=150,required=True, allow_blank=False, allow_null=False)
     email = serializers.EmailField(required=True, allow_blank=False, allow_null=False)
@@ -40,6 +40,12 @@ class UserSerializer(serializers.Serializer):
     password = serializers.CharField(max_length=20,required=True, allow_blank=False, allow_null=False)
     country = serializers.CharField(max_length=100,required=True, allow_blank=False, allow_null=False)
     brazilianState = serializers.CharField(max_length=2,required=False, allow_blank=True, allow_null=True)
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'email', 'password']
+        extra_kwargs = {'password':{'write_only': True}}
 
 class TestingSerializer(serializers.Serializer):
     tf_locus_tag = serializers.ListField()

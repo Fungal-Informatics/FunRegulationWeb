@@ -1,16 +1,18 @@
 from django.shortcuts import render
 from api.serializers import OrganismSerializer, RegulatoryInteractionSerializer, ProjectAnalysisRegistrySerializer
-from api.serializers import UserSerializer, TestingSerializer
+from api.serializers import CreateUserSerializer, TestingSerializer, UserSerializer
 from rest_framework import viewsets, permissions, mixins
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import get_authorization_header
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import APIException, AuthenticationFailed
 from django.db import DatabaseError, transaction
 from .models import Organism, RegulatoryInteraction, Profile, Gene
 from django.contrib.auth.models import User
-from itertools import chain
+from .authentication import create_access_token, refresh_access_token, decode_access_token, decode_refresh_token
 
 class OrganismViewSet(mixins.ListModelMixin,viewsets.GenericViewSet):
     queryset = Organism.objects.all()
@@ -38,7 +40,6 @@ class RegulatoryInteractionViewSet(mixins.ListModelMixin, viewsets.GenericViewSe
         serializer = RegulatoryInteractionSerializer(queryset, many=True)
         return Response({'tfs': unique_tfs,'tgs': unique_tgs,'edges':serializer.data},status=status.HTTP_200_OK)
 
-
 class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def post(self, request, format=None):
         serializer = ProjectAnalysisRegistrySerializer(data=request.data)
@@ -53,7 +54,7 @@ class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericView
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def post(self, request, format=None):
-        serializer = UserSerializer(data=request.data)
+        serializer = CreateUserSerializer(data=request.data)
         if(serializer.is_valid()):
             with transaction.atomic():
                 if(not(User.objects.filter(username=self.request.user).count()>=1)):
@@ -87,3 +88,51 @@ class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
                     profile.save()
                     return Response(serializer.data,status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class LoginViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def post(self, request):
+        user = User.objects.filter(email=request.data['email']).first()
+
+        if not user:
+            raise APIException('Invalid credentials!')
+        
+        if not user.check_password(request.data['password']):
+            raise APIException('Invalid credentials!')
+        
+        access_token = create_access_token(user.id)
+        refresh_token = refresh_access_token(user.id)
+
+        response = Response()
+        response.set_cookie(key='refreshToken', value=refresh_token, httponly=True)
+        response.data = {'token': access_token}
+        return response
+    
+class UserLoginViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def list(self, request):
+        auth = get_authorization_header(request).split()
+
+        if auth and len(auth) == 2:
+            token = auth[1].decode('utf-8')
+            id = decode_access_token(token)
+            user = User.objects.filter(pk=id).first()
+
+            return Response(UserSerializer(user).data)
+        return AuthenticationFailed('unaunthenticated')
+
+class RefreshTokenViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def post(self, request):
+        refresh_token = request.COOKIES.get('refreshToken')
+        id = decode_refresh_token(refresh_token)
+        access_token = create_access_token(id)
+        return Response({
+            'token': access_token
+        })
+    
+class LogoutViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def post(self, request):
+        respose = Response()
+        respose.delete_cookie(key="refreshToken")
+        respose.data = {
+            'message:' : 'success'
+        }
+        return respose
