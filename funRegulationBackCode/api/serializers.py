@@ -53,9 +53,3 @@ class UniqueTFsSerializer(serializers.Serializer):
 class UniqueTGsSerializer(serializers.Serializer):
     tg_locus_tag = serializers.CharField(max_length=100)
 
-# class TestingSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = RegulatoryInteraction
-#         fields = [
-#             'tf_locus_tag'
-#         ]
