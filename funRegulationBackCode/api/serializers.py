@@ -47,7 +47,15 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'email', 'password']
         extra_kwargs = {'password':{'write_only': True}}
 
-class TestingSerializer(serializers.Serializer):
-    tf_locus_tag = serializers.ListField()
-    tg_locus_tag = serializers.ListField()
-    connections = serializers.ListField()
+class UniqueTFsSerializer(serializers.Serializer):
+    tf_locus_tag = serializers.CharField(max_length=100)
+
+class UniqueTGsSerializer(serializers.Serializer):
+    tg_locus_tag = serializers.CharField(max_length=100)
+
+# class TestingSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = RegulatoryInteraction
+#         fields = [
+#             'tf_locus_tag'
+#         ]

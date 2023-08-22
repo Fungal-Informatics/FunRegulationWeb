@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 from api.views import OrganismViewSet, RegulatoryInteractionViewSet, ProjectAnalysisRegistryViewSet
 from api.views import UserViewSet, LoginViewSet, UserLoginViewSet, RefreshTokenViewSet, LogoutViewSet
+from api.views import ConfirmAccountViewSet
 
 app_name = 'api'
 
@@ -13,5 +14,6 @@ router.register(r'Login', LoginViewSet, basename='Login')
 router.register(r'UserTest', UserLoginViewSet, basename='UserTest')
 router.register(r'Refresh', RefreshTokenViewSet, basename='Refresh')
 router.register(r'Logout', LogoutViewSet, basename='Logout')
+router.register(r'ConfirmAccount', ConfirmAccountViewSet, basename='ConfirmAccount')
 
 urlpatterns = router.urls

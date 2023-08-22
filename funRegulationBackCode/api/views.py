@@ -1,44 +1,56 @@
-from django.shortcuts import render
 from api.serializers import OrganismSerializer, RegulatoryInteractionSerializer, ProjectAnalysisRegistrySerializer
-from api.serializers import CreateUserSerializer, TestingSerializer, UserSerializer
-from rest_framework import viewsets, permissions, mixins
+from api.serializers import CreateUserSerializer, UniqueTFsSerializer, UniqueTGsSerializer, UserSerializer
+from rest_framework import viewsets, permissions, mixins, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import get_authorization_header
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import APIException, AuthenticationFailed
 from django.db import DatabaseError, transaction
 from .models import Organism, RegulatoryInteraction, Profile, Gene
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
+from root.utils.email_utils import Email_Util
+from django.contrib.sites.shortcuts import get_current_site
+from django.urls import reverse
+from django.conf import settings
+import jwt
+from datetime import datetime
+from smtplib import SMTPException
 from .authentication import create_access_token, refresh_access_token, decode_access_token, decode_refresh_token
 
-class OrganismViewSet(mixins.ListModelMixin,viewsets.GenericViewSet):
+class OrganismViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = Organism.objects.all()
     serializer_class = OrganismSerializer
     permission_classes = [permissions.IsAuthenticated]
 
 class RegulatoryInteractionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    def list(self, request):
-        all_tf = list()
-        all_tg = list()
-        unique_tfs = list()
-        unique_tgs = list()
+    #permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
+    def list(self, request):        
         accession = self.request.query_params.get('organism_accession')
         queryset = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
             .filter(tf_locus_tag__organism_accession=accession)\
             .distinct()\
             .order_by('tf_locus_tag','tg_locus_tag')
-        for item in queryset:
-            all_tf.append(item.tf_locus_tag.locus_tag)
-            all_tg.append(item.tg_locus_tag.locus_tag)
         
-        unique_tfs = [*set(all_tf)]
-        unique_tgs = [*set(all_tg)]
+        unique_tfs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+            .filter(tf_locus_tag__organism_accession=accession)\
+            .distinct()\
+            .values('tf_locus_tag')\
+            .order_by('tf_locus_tag','tg_locus_tag').distinct('tf_locus_tag')
+        
+        unique_tgs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+            .filter(tf_locus_tag__organism_accession=accession)\
+            .distinct()\
+            .values('tg_locus_tag')\
+            .order_by('tg_locus_tag','tf_locus_tag').distinct('tg_locus_tag')
+        
+        unique_tfs = UniqueTFsSerializer(unique_tfs_query, many=True)
+        unique_tgs = UniqueTGsSerializer(unique_tgs_query, many=True)
         serializer = RegulatoryInteractionSerializer(queryset, many=True)
-        return Response({'tfs': unique_tfs,'tgs': unique_tgs,'edges':serializer.data},status=status.HTTP_200_OK)
+        
+        return Response({'tfs': unique_tfs.data, 'tgs': unique_tgs.data, 'edges':serializer.data}, status=status.HTTP_200_OK)
 
 class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def post(self, request, format=None):
@@ -65,12 +77,28 @@ class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
                     user.username = data['email']
                     user.set_password(data['password'])
                     user.email = user.username
-                    #user.save()
+                    user.save()
                     profile = Profile.objects.create(user=user)
                     profile.organization = data['organization']
                     profile.BrazilianState = data['brazilianState']
                     profile.country = data['country']
-                    #profile.save()
+                    profile.save()
+
+                    # SEND EMAIL TO CONFIRM ACCOUNT
+                    created_user = User.objects.get(email=data['email'])
+
+                    token = RefreshToken.for_user(created_user).access_token
+
+                    current_site = get_current_site(request).domain
+                    #relative_link = reverse('ConfirmAccount-list')
+                    relative_link = '/api/v1/ConfirmAccount'
+                    absUrl = 'http://'+current_site+relative_link+"?token="+str(token)
+                    email_body = 'Welcome '+ data['firstName']+ ' Use the link below to verify your account \n' + absUrl
+                    email_data={'email_body':email_body, 'to_email':'d7073151@gmail.com','email_subject': 'Verifiy your email'}
+                    try:
+                        Email_Util.send_email(email_data)
+                    except SMTPException as e:
+                        print(e)
                     return Response(serializer.data,status=status.HTTP_201_CREATED)
                 else:
                     data = serializer.data
@@ -136,3 +164,18 @@ class LogoutViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             'message:' : 'success'
         }
         return respose
+    
+class ConfirmAccountViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def list(self, request):
+        ConfirmationToken = request.GET.get('token')
+        try:
+            payload = jwt.decode(ConfirmationToken, settings.SECRET_KEY, algorithms='HS256')
+            user = Profile.objects.get(user=payload['user_id'])
+            user.account_confirmation = True
+            user.account_confirmation_date = datetime.now()
+            user.save()
+            return Response({'email': 'Success'}, status=status.HTTP_200_OK)
+        except jwt.ExpiredSignatureError as e:
+            return Response({'email': 'Activation Expired'}, status=status.HTTP_400_BAD_REQUEST)
+        except jwt.exceptions.DecodeError as e:
+            return Response({'email': 'Invalid Token'}, status=status.HTTP_400_BAD_REQUEST)
