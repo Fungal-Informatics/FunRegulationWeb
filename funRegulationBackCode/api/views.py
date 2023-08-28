@@ -1,7 +1,7 @@
 from api.serializers import OrganismSerializer, RegulatoryInteractionSerializer, ProjectAnalysisRegistrySerializer
 from api.serializers import CreateUserSerializer, UniqueTFsSerializer, UniqueTGsSerializer, UserSerializer
+from api.serializers import RequestPasswordEmailSerializer, SetNewPasswordSerializer
 from rest_framework import viewsets, permissions, mixins, generics
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import get_authorization_header
@@ -10,14 +10,17 @@ from django.db import DatabaseError, transaction
 from .models import Organism, RegulatoryInteraction, Profile, Gene
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
-from root.utils.email_utils import Email_Util
+from root.utils.tasks_email import send_email
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
 import jwt
 from datetime import datetime
 from smtplib import SMTPException
-from .authentication import create_access_token, refresh_access_token, decode_access_token, decode_refresh_token
+from .authentication import create_access_token, refresh_access_token, decode_access_token,decode_refresh_token
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import smart_str,force_str, smart_bytes, DjangoUnicodeDecodeError
 
 class OrganismViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = Organism.objects.all()
@@ -94,9 +97,10 @@ class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
                     relative_link = '/api/v1/ConfirmAccount'
                     absUrl = 'http://'+current_site+relative_link+"?token="+str(token)
                     email_body = 'Welcome '+ data['firstName']+ ' Use the link below to verify your account \n' + absUrl
-                    email_data={'email_body':email_body, 'to_email':'d7073151@gmail.com','email_subject': 'Verifiy your email'}
+                    email_data={'email_body':email_body, 'to_email':data['email'],
+                                'email_subject': 'Verifiy your email'}
                     try:
-                        Email_Util.send_email(email_data)
+                        send_email(email_data)
                     except SMTPException as e:
                         print(e)
                     return Response(serializer.data,status=status.HTTP_201_CREATED)
@@ -179,3 +183,50 @@ class ConfirmAccountViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             return Response({'email': 'Activation Expired'}, status=status.HTTP_400_BAD_REQUEST)
         except jwt.exceptions.DecodeError as e:
             return Response({'email': 'Invalid Token'}, status=status.HTTP_400_BAD_REQUEST)
+
+class RequestPasswordResetEmail(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = RequestPasswordEmailSerializer
+
+    def post(self, request):
+        data = {'request': request,'data': request.data}
+        serializer = self.serializer_class(data=data)
+        email = request.data['email']
+        if User.objects.filter(email = email).exists():
+            user = User.objects.get(email = email)
+            uidb64 = urlsafe_base64_encode(smart_bytes(user.id))
+            token = PasswordResetTokenGenerator().make_token(user)
+            current_site = get_current_site(request=request).domain
+            #relative_link = reverse('api:PasswordReset-list', kwargs={'uidb64': uidb64, 'token': token})
+            relative_link = '/api/v1/PasswordReset/'+str(uidb64)+'/'+str(token)+'/'
+            absUrl = 'http://'+current_site+relative_link
+            email_body = 'Hello, use the link below to reset your password \n' + absUrl
+            email_data={'email_body':email_body, 'to_email':'d7073151@gmail.com','email_subject': 'Reset your password'}
+            try:
+                send_email(email_data)
+            except SMTPException as e:
+                print(e)
+        return Response({'Success':'We sent the link to you reset your password'}, status=status.HTTP_200_OK)
+
+class PasswordTokenCheckViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    def list(self, request, uidb64, token):
+        try:
+            print(uidb64)
+            id = smart_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(id=id)
+
+            if not PasswordResetTokenGenerator().check_token(user, token):
+                return Response({'error':'Token is not valid anymore, please request a new one'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            return Response({'success':True, 'message':'Credentials valid', 'uidb64': uidb64, 'token':token}, status=status.HTTP_200_OK)
+
+        except DjangoUnicodeDecodeError as e:
+            return Response({'error':'Token is not valid anymore, please request a new one'}, status=status.HTTP_401_UNAUTHORIZED)
+
+class SetNewPasswordViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = SetNewPasswordSerializer
+
+    def post(self, request):
+        serializer = self.serializer_class(data = request.data)
+
+        serializer.is_valid(raise_exception=True)
+        return Response({'Success': True, 'Message': 'Password reset success'},status=status.HTTP_200_OK)
