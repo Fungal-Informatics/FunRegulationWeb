@@ -9,7 +9,7 @@ app_name = 'api'
 router = DefaultRouter(trailing_slash=False)
 router.register(r'Organisms', OrganismViewSet)
 router.register(r'^RegulatoryInteraction/$', RegulatoryInteractionViewSet, basename='RegulatoryInteraction')
-router.register(r'ProjectAnalysisRegistry', ProjectAnalysisRegistryViewSet, basename='ProjectAnalysisRegistry')
+router.register(r'CreateGrn', ProjectAnalysisRegistryViewSet, basename='CreateGrn')
 router.register(r'CreateProfile', UserViewSet, basename='Profile')
 router.register(r'Login', LoginViewSet, basename='Login')
 router.register(r'UserTest', UserLoginViewSet, basename='UserTest')

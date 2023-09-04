@@ -7,10 +7,11 @@ from rest_framework import status
 from rest_framework.authentication import get_authorization_header
 from rest_framework.exceptions import APIException, AuthenticationFailed
 from django.db import DatabaseError, transaction
-from .models import Organism, RegulatoryInteraction, Profile, Gene
+from .models import Organism, RegulatoryInteraction, Profile, Gene, ProjectAnalysisRegistry
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from root.utils.tasks_email import send_email
+from projects import tasks_external_tools, tasks_import
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
@@ -21,6 +22,7 @@ from .authentication import create_access_token, refresh_access_token, decode_ac
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import smart_str,force_str, smart_bytes, DjangoUnicodeDecodeError
+from celery import chain
 
 class OrganismViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = Organism.objects.all()
@@ -59,12 +61,21 @@ class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericView
     def post(self, request, format=None):
         serializer = ProjectAnalysisRegistrySerializer(data=request.data)
         if(serializer.is_valid()):
-            # with transaction.atomic:
-            # accession = self.validated_data.get("organism_accession")
-            # rsat = self.validated_data.get("rsat_analyse")
-            serializer.organism_accession = "ENTREI AQUI"
-            #serializer.save()
-            return Response(serializer.data,status=status.HTTP_201_CREATED)
+            with transaction.atomic():
+                data = serializer.data
+                registry = ProjectAnalysisRegistry(created_by=self.request.user)
+                registry.organism_accession = data['organism_accession']
+                registry.proteinortho_analyse = True
+                registry.rsat_analyse = data['rsat_analyse']
+                registry.save()
+                if(data['download_organism']):
+                    #tasks_import.task_import_genes(organism_accession=registry.organism_accession)
+                    tasks_external_tools.analyse_registry(registry)
+                else:
+                    # UPLOAD FILES
+                    pass
+                
+            return Response(serializer.data,status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

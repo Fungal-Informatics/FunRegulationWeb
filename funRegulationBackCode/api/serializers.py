@@ -31,13 +31,10 @@ class RegulatoryInteractionSerializer(serializers.ModelSerializer):
             'pubmedid_source'
         ]
     
-class ProjectAnalysisRegistrySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectAnalysisRegistry
-        fields = [
-            'organism_accession',
-            'rsat_analyse'
-        ]
+class ProjectAnalysisRegistrySerializer(serializers.Serializer):
+    organism_accession = serializers.CharField(max_length=150, required=True, allow_blank=False, allow_null=False)
+    rsat_analyse = serializers.BooleanField(required=True, allow_null=False)
+    download_organism = serializers.BooleanField(required=True, allow_null=False)
 
 class CreateUserSerializer(serializers.Serializer):
     firstName = serializers.CharField(max_length=30,required=True, allow_blank=False, allow_null=False)

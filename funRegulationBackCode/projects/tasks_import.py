@@ -4,7 +4,8 @@ import os.path
 from zipfile import ZipFile
 from celery import shared_task
 from django_celery_results.models import TaskResult
-from funRegulationTool.task_utils import FunRegulationBaseTask   
+from funRegulationTool.task_utils import FunRegulationBaseTask
+from api.models import ProjectAnalysisRegistry
 
 import sys
 from typing import List
@@ -16,15 +17,17 @@ from ncbi.datasets.metadata.genome import get_assembly_metadata_by_bioproject_ac
 
 from ncbi.datasets.package import dataset
 
-def import_genes(import_registry):
-    #if import_registry is None or type(import_registry) is not GeneImportRegistry:
-    #    raise ValueError('registry should be an instance of GeneImportRegistry')
-    result = task_import_genes.apply_async((import_registry.pk,))
-    import_registry.task = TaskResult.objects.get(task_id=result.task_id)
-    import_registry.save()
+# def import_genes(import_registry):
+#     if import_registry is None or type(import_registry) is not ProjectAnalysisRegistry:
+#         raise ValueError('registry should be an instance of ProjectAnalysisRegistry')
+#     result = task_import_genes.apply_async((import_registry.organism_accession,))
+#     import_registry.task = TaskResult.objects.get(task_id=result.task_id)
+#     import_registry.save()
 
-@shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
-def task_import_genes(self, organism_accession):
+#@shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
+#def task_import_genes(self, organism_accession):
+@shared_task
+def task_import_genes(organism_accession):
     download_path = settings.NCBI_DOWNLOAD_PATH
     accessions: List[str] = [organism_accession]
     zipfile_name = organism_accession+".zip"
