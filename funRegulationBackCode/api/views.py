@@ -11,7 +11,7 @@ from .models import Organism, RegulatoryInteraction, Profile, Gene, ProjectAnaly
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from root.utils.tasks_email import send_email
-from projects import tasks_external_tools, tasks_import
+from projects import tasks_external_tools, tasks_import, tasks_chain
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
@@ -22,7 +22,7 @@ from .authentication import create_access_token, refresh_access_token, decode_ac
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import smart_str,force_str, smart_bytes, DjangoUnicodeDecodeError
-from celery import chain
+
 
 class OrganismViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     queryset = Organism.objects.all()
@@ -67,15 +67,14 @@ class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericView
                 registry.organism_accession = data['organism_accession']
                 registry.proteinortho_analyse = True
                 registry.rsat_analyse = data['rsat_analyse']
+                registry.download_organism = data['download_organism']
                 registry.save()
                 if(data['download_organism']):
-                    #tasks_import.task_import_genes(organism_accession=registry.organism_accession)
-                    tasks_external_tools.analyse_registry(registry)
+                    tasks_chain.analyse_registry(registry)
                 else:
                     # UPLOAD FILES
                     pass
-                
-            return Response(serializer.data,status=status.HTTP_200_OK)
+            return Response({'registro': registry.pk, 'requisicao':serializer.data}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

@@ -1,3 +1,4 @@
+import logging
 from subprocess import Popen, PIPE
 from django.db import transaction
 from api.models import *
@@ -12,17 +13,15 @@ class ProteinOrthoAnalyseEngine:
         self.work_folder = work_folder
         self.timeout = timeout
 
-    def analyse_items(self, organism_accession):
+    def analyse_items(self, registry_id, organism_accession):
         model_organism = []
         model_organism = self.__get_model_organism(organism_accession)
         target_organism_protein_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/protein.faa"
         target_organism_gbff_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/genomic.gbff"
-
-        # item = ProjectAnalysisRegistryItem.objects.select_related('feature')\
-        #     .filter(feature__organism__accession=organism_accession, active=True,
-        #             feature__removed=False, feature__organism__removed=False)
                     
         command = ["perl", self.proteinOrtho_path, model_organism[0], target_organism_protein_file]
+
+        item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
 
         if not os.path.exists(self.work_folder+"/proteinOrtho"):
             gbff_handler(organism_accession, target_organism_gbff_file)
@@ -32,15 +31,13 @@ class ProteinOrthoAnalyseEngine:
 
         proc = Popen(command, stdout=PIPE, stderr=PIPE)
         output, error = proc.communicate()
-        proc.communicate()
-
+        
         filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
         ret = proc.returncode
+
         if ret != 0:
-            print(output)
-            print('END OUTPUT')
-            print(error)
-            #self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
+            logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output )
+            self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
         else:
             with open(filename) as in_file:
                 for line in in_file:
@@ -66,8 +63,7 @@ class ProteinOrthoAnalyseEngine:
 
             in_file.close()
             construct_grn_orthology(model_organism[1], organism_accession)
-        
-
+            self.__set_analysed(item)
 
     @staticmethod
     def __get_model_organism(organism_accession):

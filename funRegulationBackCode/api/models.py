@@ -213,6 +213,7 @@ class ProjectAnalysisRegistry(models.Model):
     created_by = models.ForeignKey(User, related_name='analysis_registries_created', on_delete=models.PROTECT)
     date_inactive = models.DateTimeField(null=True, blank=True)
     organism_accession = models.CharField(max_length=100, null=False, default="vazio")
+    download_organism = models.BooleanField(default=False)
     proteinortho_analyse = models.BooleanField(default=True)
     rsat_analyse = models.BooleanField(default=False)
     proteinortho_analysed = models.BooleanField(default=False)
@@ -225,6 +226,8 @@ class ProjectAnalysisRegistry(models.Model):
     task_rsat = models.OneToOneField(TaskResult, null=True, blank=True,
                                          related_name='rsat_analysis_registry_item',
                                          on_delete=models.SET_NULL)
+    download_completed = models.BooleanField(default=False)
+    task_download_organism = models.OneToOneField(TaskResult, null=True, blank=True,on_delete=models.SET_NULL)
     task = models.OneToOneField(TaskResult, null=True, blank=True,
                                 related_name='analysis_registry', on_delete=models.SET_NULL)
 
@@ -232,6 +235,9 @@ class ProjectAnalysisRegistry(models.Model):
         return str(self.pk)
 
 class ProteinOrthoErrorType(enum.Enum):
+    COMMAND_ERROR = 1
+
+class RsatErrorType(enum.Enum):
     COMMAND_ERROR = 1
 
 class SystemPreferenceType(enum.Enum):

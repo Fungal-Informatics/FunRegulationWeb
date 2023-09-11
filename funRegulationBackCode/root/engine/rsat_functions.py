@@ -39,7 +39,7 @@ def parse_pwm_file(in_file_pwm):
                 if pubmedid == 'NULL':
                     pubmedid = ''
                 pwm = Pwm(locus_tag=Gene.objects.get(locus_tag=locus_tag), motif_id=motif_id, status=status, tf_family=tf_family, motif_type=motif_type, msource_author=msource_author, msource=msource, pubmedid=pubmedid)
-                #pwm.save()
+                pwm.save()
     in_file.close()
     lib.log.info(in_file_pwm + " parsed correctly")
 
