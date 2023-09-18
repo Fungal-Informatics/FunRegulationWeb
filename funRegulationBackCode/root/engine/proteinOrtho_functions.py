@@ -8,7 +8,7 @@ from collections import namedtuple
 from Bio import SeqIO
 from django.conf import settings
 from BCBio import GFF
-from time import sleep
+from django.db import transaction, connection
 
 upstream = -1000
 downstream = 0
@@ -307,17 +307,10 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
     model_regulatory_interactions = select_model_regulatory_by_organism_id(model_organism_accession)
     
     for model_regulatory in model_regulatory_interactions:
-        tf_locus_tag = model_regulatory._meta.get_field('tf_locus_tag')
-        tf = tf_locus_tag.value_from_object(model_regulatory)
-
-        tg_locus_tag = model_regulatory._meta.get_field('tg_locus_tag')
-        tg = tg_locus_tag.value_from_object(model_regulatory)
-
-        regulatory_function = model_regulatory._meta.get_field('regulatory_function')
-        rf_value = regulatory_function.value_from_object(model_regulatory)
-
-        pubmed = model_regulatory._meta.get_field('pubmedid')
-        pubmed_value = pubmed.value_from_object(model_regulatory)
+        tf = model_regulatory.tf_locus_tag.locus_tag
+        tg = model_regulatory.tg_locus_tag.locus_tag
+        rf_value = model_regulatory.regulatory_function
+        pubmed_value = model_regulatory.pubmedid
         
         tf_orthologs = select_orthologs_by_target_organism(tf, target_organism_accession)
         tg_orthologs = select_orthologs_by_target_organism(tg, target_organism_accession)
@@ -337,33 +330,27 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
                     Gene.objects.filter(pk=ortho_tg).update(is_tf=True)
 
 def select_model_regulatory_by_organism_id(organism_id):
-    dbConnection = create_db_connection()
     model_regulatory_interactions = list()
     try:
-        cursor = dbConnection.cursor()
-        cursor.execute("SELECT DISTINCT * from model_regulatory model right join gene gen on model.tf_locus_tag = gen.locus_tag AND gen.organism_accession = %s WHERE model.tf_locus_tag IS NOT NULL", (organism_id,))
-        rec = cursor.fetchall()
-        for row in rec:
-            model_regulatory = ModelRegulatory(row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8])
-            model_regulatory_interactions.append(model_regulatory)
-        cursor.close()
+        model_regulatory_interactions = ModelRegulatory.objects.select_related('tf_locus_tag')\
+                                        .filter(tf_locus_tag__organism_accession=organism_id)\
+                                        .filter(tf_locus_tag__isnull=False).distinct()
         return model_regulatory_interactions
-    except (Exception, psycopg2.Error) as error:
+    except (Exception) as error:
         lib.log.info("Failed to execute the select into table model_regulatory", error)
         lib.log.info(organism_id)
 
 def select_orthologs_by_target_organism(model_locus_tag, target_organism_id):
-    dbConnection = create_db_connection()
     orthology_list = list()
     try:
-        cursor = dbConnection.cursor()
-        cursor.execute("SELECT DISTINCT model_protein, target_protein from orthology ortho join protein prot on ortho.model_protein = prot.id join gene gen on prot.locus_tag = %s AND gen.organism_accession = %s WHERE ortho.model_protein IS NOT NULL", (model_locus_tag, target_organism_id,))
-        rec = cursor.fetchall()
-        for row in rec:
-            ortho = Orthology(select_protein_by_id(row[0]),select_protein_by_id(row[1]))
-            orthology_list.append(ortho)
-        cursor.close()
-        return orthology_list
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT DISTINCT model_protein, target_protein from orthology ortho join protein prot on ortho.model_protein = prot.id join gene gen on prot.locus_tag = %s AND gen.organism_accession = %s WHERE ortho.model_protein IS NOT NULL", (model_locus_tag, target_organism_id,))
+            rec = cursor.fetchall()
+            for row in rec:
+                ortho = Orthology(select_protein_by_id(row[0]),select_protein_by_id(row[1]))
+                orthology_list.append(ortho)
+            cursor.close()
+            return orthology_list
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to execute the select into table orthology", error)
         lib.log.info(model_locus_tag)
@@ -428,100 +415,101 @@ def gbff_handler(assembly_accession, in_file_target_genome):
     recordCount = 0
     promoters_partially_extracted = 0
 
-    for seq_record in SeqIO.parse(in_file_target_genome, "genbank"):
-        for feature in seq_record.features:
-            # Insert Gene
-            if feature.type == "gene":
-                locus_tag = str(feature.qualifiers.get("locus_tag",[])[0])
-                symbol_gene = feature.qualifiers.get("gene",[])
-                if len(symbol_gene) == 0:
-                    symbol_gene = ''
-                else:
-                    symbol_gene = str(symbol_gene[0])
-                is_tf = False
+    with transaction.atomic(): 
+        for seq_record in SeqIO.parse(in_file_target_genome, "genbank"):
+            for feature in seq_record.features:
+                # Insert Gene
+                if feature.type == "gene":
+                    locus_tag = str(feature.qualifiers.get("locus_tag",[])[0])
+                    symbol_gene = feature.qualifiers.get("gene",[])
+                    if len(symbol_gene) == 0:
+                        symbol_gene = ''
+                    else:
+                        symbol_gene = str(symbol_gene[0])
+                    is_tf = False
 
-                gene = Gene(organism_accession=Organism.objects.get(accession=assembly_accession),locus_tag=locus_tag,symbol_gene=symbol_gene,is_tf=is_tf)
-                gene.save()
-                recordCount+=1
-                
-                #Insert Promoter
-                mystart = feature.location.start
-                myend = feature.location.end
-                strand = feature.strand
-                promoter_seq = None
-                promoter = None
-                if strand == 1:
-                    if mystart+upstream > 0 :
-                        promoter_seq = seq_record.seq[mystart+upstream:mystart+downstream]
-                        promoter_seq = str(promoter_seq)
-                        promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=mystart+upstream, stop=mystart+downstream,promoter_seq=promoter_seq)
+                    gene = Gene(organism_accession=Organism.objects.get(accession=assembly_accession),locus_tag=locus_tag,symbol_gene=symbol_gene,is_tf=is_tf)
+                    gene.save()
+                    recordCount+=1
+                    
+                    #Insert Promoter
+                    mystart = feature.location.start
+                    myend = feature.location.end
+                    strand = feature.strand
+                    promoter_seq = None
+                    promoter = None
+                    if strand == 1:
+                        if mystart+upstream > 0 :
+                            promoter_seq = seq_record.seq[mystart+upstream:mystart+downstream]
+                            promoter_seq = str(promoter_seq)
+                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=mystart+upstream, stop=mystart+downstream,promoter_seq=promoter_seq)
+                        else:
+                            # incomplete promoters
+                            promoter_seq = seq_record.seq[1:mystart+downstream]
+                            promoter_seq = str(promoter_seq)
+                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=1, stop=mystart+downstream, promoter_seq=promoter_seq)
+                            lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                            promoters_partially_extracted += 1
                     else:
-                        # incomplete promoters
-                        promoter_seq = seq_record.seq[1:mystart+downstream]
-                        promoter_seq = str(promoter_seq)
-                        promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=1, stop=mystart+downstream, promoter_seq=promoter_seq)
-                        lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
-                        promoters_partially_extracted += 1
-                else:
-                    if myend-len(seq_record) <= 0 :
-                        promoter_seq = seq_record.seq[myend-downstream:myend-upstream]
-                        promoter_seq = promoter_seq.reverse_complement()
-                        promoter_seq = str(promoter_seq)
-                        promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=myend-upstream, stop=myend-downstream, promoter_seq=promoter_seq)
+                        if myend-len(seq_record) <= 0 :
+                            promoter_seq = seq_record.seq[myend-downstream:myend-upstream]
+                            promoter_seq = promoter_seq.reverse_complement()
+                            promoter_seq = str(promoter_seq)
+                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=myend-upstream, stop=myend-downstream, promoter_seq=promoter_seq)
+                        else:
+                            # incomplete promoters
+                            promoter_seq = seq_record.seq[myend-downstream:len(seq_record)]
+                            promoter_seq = promoter_seq.reverse_complement()
+                            promoter_seq = str(promoter_seq)
+                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=len(seq_record), stop=myend-downstream, promoter_seq=promoter_seq)
+                            lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                            promoters_partially_extracted += 1
+                    promoter.save()
+                    
+                #Insert Proteins
+                if feature.type == "CDS":
+                    locus_tag = str(feature.qualifiers.get("locus_tag",[])[0])
+                    protein_id = str(feature.qualifiers.get("protein_id",[])[0])
+                    product = feature.qualifiers.get("product",[])
+                    if len(product) == 0:
+                        product = ''
                     else:
-                        # incomplete promoters
-                        promoter_seq = seq_record.seq[myend-downstream:len(seq_record)]
-                        promoter_seq = promoter_seq.reverse_complement()
-                        promoter_seq = str(promoter_seq)
-                        promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=len(seq_record), stop=myend-downstream, promoter_seq=promoter_seq)
-                        lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
-                        promoters_partially_extracted += 1
-                promoter.save()
-                
-            #Insert Proteins
-            if feature.type == "CDS":
-                locus_tag = str(feature.qualifiers.get("locus_tag",[])[0])
-                protein_id = str(feature.qualifiers.get("protein_id",[])[0])
-                product = feature.qualifiers.get("product",[])
-                if len(product) == 0:
-                    product = ''
-                else:
-                    product = str(product[0])
-                
-                ec_number = feature.qualifiers.get("EC_number",[])
-                if len(ec_number) == 0:
-                    ec_number = ''
-                else:
-                    ec_number = str(ec_number[0])
-                
-                interpro = ''
-                pfam = ''
-                uniprot = ''
-                
-                dbxrefs = feature.qualifiers.get("db_xref")
-                if dbxrefs != None:
-                    for value in dbxrefs :
-                        if "interpro" in value.lower():
-                            if interpro == '':
-                                interpro = value.split(':')[1]
-                            else:
-                                interpro = interpro+','+value.split(':')[1]
-                        if "pfam" in value.lower():
-                            if pfam == '':
-                                pfam = value.split(':')[1]
-                            else:
-                                pfam = pfam+','+value.split(':')[1]
-                        if "uniprot" in value.lower():
-                            if uniprot == '':
-                                uniprot = value.split(':')[1]
-                            else:
-                                uniprot = uniprot+','+value.split(':')[1]
-                protein = Protein(locus_tag=Gene.objects.get(locus_tag=locus_tag), id=protein_id, product=product, interpro=interpro, pfam=pfam, go='',gene3d='',reactome='',panther='',uniprot=uniprot, ec_number=ec_number, cazy='',uniparc='')
-                protein.save()
-                
-    lib.log.info("%d genes were found" % recordCount)
-    lib.log.info("Promoters partially identified: %d" % promoters_partially_extracted)
-    lib.log.info("GFF3 file successfully parsed")
+                        product = str(product[0])
+                    
+                    ec_number = feature.qualifiers.get("EC_number",[])
+                    if len(ec_number) == 0:
+                        ec_number = ''
+                    else:
+                        ec_number = str(ec_number[0])
+                    
+                    interpro = ''
+                    pfam = ''
+                    uniprot = ''
+                    
+                    dbxrefs = feature.qualifiers.get("db_xref")
+                    if dbxrefs != None:
+                        for value in dbxrefs :
+                            if "interpro" in value.lower():
+                                if interpro == '':
+                                    interpro = value.split(':')[1]
+                                else:
+                                    interpro = interpro+','+value.split(':')[1]
+                            if "pfam" in value.lower():
+                                if pfam == '':
+                                    pfam = value.split(':')[1]
+                                else:
+                                    pfam = pfam+','+value.split(':')[1]
+                            if "uniprot" in value.lower():
+                                if uniprot == '':
+                                    uniprot = value.split(':')[1]
+                                else:
+                                    uniprot = uniprot+','+value.split(':')[1]
+                    protein = Protein(locus_tag=Gene.objects.get(locus_tag=locus_tag), id=protein_id, product=product, interpro=interpro, pfam=pfam, go='',gene3d='',reactome='',panther='',uniprot=uniprot, ec_number=ec_number, cazy='',uniparc='')
+                    protein.save()
+                    
+        lib.log.info("%d genes were found" % recordCount)
+        lib.log.info("Promoters partially identified: %d" % promoters_partially_extracted)
+        lib.log.info("GFF3 file successfully parsed")
      
 def create_db_connection():
     try:

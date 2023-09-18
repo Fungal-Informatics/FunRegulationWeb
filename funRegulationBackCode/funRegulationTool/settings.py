@@ -32,12 +32,14 @@ INSTALLED_APPS = [
     'root',
     'projects',
     'rest_framework',
+    'corsheaders',
     'api'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -99,6 +101,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (   
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#     )
+# }
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/2.1/topics/i18n/
@@ -124,6 +132,7 @@ CELERY_TASK_ROUTES = {
     'analyse_registry': 'analyse_registry',
     'run_proteinortho': 'run_proteinortho',
     'run_rsat': 'run_rsat',
+    'send_email': 'send_email'
 }
 
 # GENERAL FILES
@@ -152,3 +161,13 @@ RSAT_SAVE_PATH = config('FUNREGULATION_RSAT_SAVE_PATH')
 # PROTEINORTHO
 PROTEINORTHO_PATH = config('FUNREGULATION_PROTEINORTHO_PATH')
 PROTEINORTHO_SAVE_PATH = config('FUNREGULATION_PROTEINORTHO_SAVE_PATH')
+
+# EMAIL
+EMAIL_USE_TLS = config('FUNREGULATION_EMAIL_USE_TLS')
+EMAIL_HOST = config('FUNREGULATION_EMAIL_HOST')
+EMAIL_PORT = config('FUNREGULATION_EMAIL_PORT')
+EMAIL_HOST_USER = config('FUNREGULATION_EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('FUNREGULATION_EMAIL_HOST_PASSWORD')
+
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True

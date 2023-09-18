@@ -1,3 +1,4 @@
+import logging
 from subprocess import Popen, PIPE
 from django.db import transaction
 from api.models import *
@@ -14,14 +15,14 @@ class RsatAnalyseEngine:
         self.pwms_folder = pwms_folder
         self.timeout = timeout
 
-    def analyse_items(self, organism_accession):
-        # $RSAT/perl-scripts/matrix-scan -v 1 -quick -matrix_format transfac -m $RSAT/public_html/tmp/apache/2023/06/06/matrix-scan_2023-06-06.034929_rcdCPQ.matrix -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -lth score 1 -i $RSAT/public_html/tmp/apache/2023/06/06/tmp_sequence_2023-06-06.034929_snSaH7.fasta -seq_format fasta -n score 
-        # $RSAT/perl-scripts/matrix-scan -v 1 -matrix_format transfac -m $RSAT/public_html/tmp/apache/2023/06/06/matrix-scan_2023-06-06.034658_lxFc3q.matrix -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1  -uth pval 1e-4  -i $RSAT/public_html/tmp/apache/2023/06/06/tmp_sequence_2023-06-06.034658_jf1KPB.fasta -seq_format fasta -n score
+    def analyse_items(self, registry_id, organism_accession):
         tf_list = list()
         pwm_list = list()
         regulatory_interactions_list = list()
         prediction_list = list()
         target_pwm_file = settings.TARGET_PWMS_FILES_PATH+organism_accession+'/TF_Information.txt'
+
+        item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
 
         if os.path.exists(target_pwm_file):
             parse_pwm_file(target_pwm_file)
@@ -56,18 +57,16 @@ class RsatAnalyseEngine:
                             if(matrix == ("Pos	A	C	G	T"+'\n')):
                                 lib.log.info("Null Matrix: " + pwm.motif_id)
                             else:
-                                #cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin end -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-4 -i "+promoter_sequence+" -seq_format fasta -n score"
-                                cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-2 -i "+temp_file+" -seq_format fasta -n score"
-                                #cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-2 -sequence "+promoter_sequence+" -seq_format fasta -n score"
+                                cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-4 -i "+temp_file+" -seq_format fasta -n score"
                 
                                 rsat_call = Popen(cmd, shell=True,stdout=PIPE,stderr=PIPE)
-                                out, error = rsat_call.communicate()
+                                output, error = rsat_call.communicate()
                                 ret = rsat_call.returncode
                                 if ret != 0:
-                                    print("RSAT failed %d %s %s" % (rsat_call.returncode, out, error))
+                                    logging.info('Rsat analysis error for organism %s, Error: ' % organism_accession, output )
+                                    self.__set_error(item, RsatErrorType.COMMAND_ERROR.value)
                                 else:
-                                    result = str(out)
-
+                                    result = str(output)
                                     parts = result.strip().split("\\t")
                                     # Create new TFBS prediction for each RSAT prediction result
                                     strand = urllib.parse.unquote(parts[76])
@@ -82,9 +81,10 @@ class RsatAnalyseEngine:
                                     tfbs = Tfbs(regulatory_interaction=RegulatoryInteraction.objects.get(pk=regulatory_interaction.id),
                                                 pwm=Pwm.objects.get(pk=pwm.id), strand = strand, start = start, end = end, 
                                                 sequence = sequence, weight = weight, pval = pval, ln_pval = ln_pval, sig = sig)
-                                    #tfbs.save()
+                                    tfbs.save()
                         else:
                             lib.log.info("TFBS Prediction File already exists: " +regulatory_interaction.tf_locus_tag.locus_tag+"-"+regulatory_interaction.tg_locus_tag.locus_tag+"-"+pwm.motif_id+ ".txt")
+            self.__set_analysed(item)
         else:
             lib.log.info('The tf information file for '+organism_accession+' doesnt exist')
 

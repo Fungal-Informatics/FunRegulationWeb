@@ -1,3 +1,4 @@
+import logging
 from subprocess import Popen, PIPE
 from django.db import transaction
 from api.models import *
@@ -12,62 +13,62 @@ class ProteinOrthoAnalyseEngine:
         self.work_folder = work_folder
         self.timeout = timeout
 
-    def analyse_items(self, organism_accession):
+    def analyse_items(self, registry_id, organism_accession):
         model_organism = []
         model_organism = self.__get_model_organism(organism_accession)
         target_organism_protein_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/protein.faa"
         target_organism_gbff_file = settings.NCBI_DOWNLOAD_PATH+organism_accession+"/ncbi_dataset/data/"+organism_accession+"/genomic.gbff"
-
-        # item = ProjectAnalysisRegistryItem.objects.select_related('feature')\
-        #     .filter(feature__organism__accession=organism_accession, active=True,
-        #             feature__removed=False, feature__organism__removed=False)
                     
         command = ["perl", self.proteinOrtho_path, model_organism[0], target_organism_protein_file]
 
-        if not os.path.exists(self.work_folder+"/proteinOrtho"):
-            gbff_handler(organism_accession, target_organism_gbff_file)
-            os.makedirs(self.work_folder+"/proteinOrtho")
-
-        os.chdir(self.work_folder+"/proteinOrtho")
-
-        proc = Popen(command, stdout=PIPE, stderr=PIPE)
-        output, error = proc.communicate()
-        proc.communicate()
-
-        filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
-        ret = proc.returncode
-        if ret != 0:
-            print(output)
-            print('END OUTPUT')
-            print(error)
-            #self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
-        else:
-            with open(filename) as in_file:
-                for line in in_file:
-                    if line.startswith("#"): 
-                        continue
-                    line_parts = line.strip().split("\t")
-                    
-                    model = urllib.parse.unquote(line_parts[3])
-                    target = urllib.parse.unquote(line_parts[4])
-                    
-                    model_parts = model.strip().split(",")
-                    target_parts = target.strip().split(",")
-
-                    for record_model in model_parts:
-                        for record_target in target_parts:
-                            if (record_model != '*' and record_target != '*'):
-                                model_protein = select_protein_by_id(record_model)
-                                target_protein = select_protein_by_id(record_target)
-                                orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
-
-                                if(orthology != None):
-                                    orthology.save()
-
-            in_file.close()
-            construct_grn_orthology(model_organism[1], organism_accession)
+        item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
+        organism_analysed = ProjectAnalysisRegistry.objects.filter(organism_accession=organism_accession)\
+                .filter(proteinortho_analysed=True).count()
         
+        if organism_analysed <= 0:
+            if not os.path.exists(self.work_folder+"/proteinOrtho"):
+                gbff_handler(organism_accession, target_organism_gbff_file)
+                os.makedirs(self.work_folder+"/proteinOrtho")
 
+            os.chdir(self.work_folder+"/proteinOrtho")
+
+            proc = Popen(command, stdout=PIPE, stderr=PIPE)
+            output, error = proc.communicate()
+            
+            filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
+            ret = proc.returncode
+
+            if ret != 0:
+                logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output )
+                self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
+            else:
+                with open(filename) as in_file:
+                    for line in in_file:
+                        if line.startswith("#"): 
+                            continue
+                        line_parts = line.strip().split("\t")
+                        
+                        model = urllib.parse.unquote(line_parts[3])
+                        target = urllib.parse.unquote(line_parts[4])
+                        
+                        model_parts = model.strip().split(",")
+                        target_parts = target.strip().split(",")
+
+                        for record_model in model_parts:
+                            for record_target in target_parts:
+                                if (record_model != '*' and record_target != '*'):
+                                    model_protein = select_protein_by_id(record_model)
+                                    target_protein = select_protein_by_id(record_target)
+                                    orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
+
+                                    if(orthology != None):
+                                        orthology.save()
+
+                in_file.close()
+                construct_grn_orthology(model_organism[1], organism_accession)
+                self.__set_analysed(item)
+        else:
+            logging.info('The organism {} already has the proteinOrtho data in database'.format(organism_accession))
 
     @staticmethod
     def __get_model_organism(organism_accession):
