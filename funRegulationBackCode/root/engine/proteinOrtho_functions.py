@@ -8,7 +8,7 @@ from collections import namedtuple
 from Bio import SeqIO
 from django.conf import settings
 from BCBio import GFF
-from django.db import transaction
+from django.db import transaction, connection
 
 upstream = -1000
 downstream = 0
@@ -307,17 +307,10 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
     model_regulatory_interactions = select_model_regulatory_by_organism_id(model_organism_accession)
     
     for model_regulatory in model_regulatory_interactions:
-        tf_locus_tag = model_regulatory._meta.get_field('tf_locus_tag')
-        tf = tf_locus_tag.value_from_object(model_regulatory)
-
-        tg_locus_tag = model_regulatory._meta.get_field('tg_locus_tag')
-        tg = tg_locus_tag.value_from_object(model_regulatory)
-
-        regulatory_function = model_regulatory._meta.get_field('regulatory_function')
-        rf_value = regulatory_function.value_from_object(model_regulatory)
-
-        pubmed = model_regulatory._meta.get_field('pubmedid')
-        pubmed_value = pubmed.value_from_object(model_regulatory)
+        tf = model_regulatory.tf_locus_tag.locus_tag
+        tg = model_regulatory.tg_locus_tag.locus_tag
+        rf_value = model_regulatory.regulatory_function
+        pubmed_value = model_regulatory.pubmedid
         
         tf_orthologs = select_orthologs_by_target_organism(tf, target_organism_accession)
         tg_orthologs = select_orthologs_by_target_organism(tg, target_organism_accession)
@@ -337,33 +330,27 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
                     Gene.objects.filter(pk=ortho_tg).update(is_tf=True)
 
 def select_model_regulatory_by_organism_id(organism_id):
-    dbConnection = create_db_connection()
     model_regulatory_interactions = list()
     try:
-        cursor = dbConnection.cursor()
-        cursor.execute("SELECT DISTINCT * from model_regulatory model right join gene gen on model.tf_locus_tag = gen.locus_tag AND gen.organism_accession = %s WHERE model.tf_locus_tag IS NOT NULL", (organism_id,))
-        rec = cursor.fetchall()
-        for row in rec:
-            model_regulatory = ModelRegulatory(row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7],row[8])
-            model_regulatory_interactions.append(model_regulatory)
-        cursor.close()
+        model_regulatory_interactions = ModelRegulatory.objects.select_related('tf_locus_tag')\
+                                        .filter(tf_locus_tag__organism_accession=organism_id)\
+                                        .filter(tf_locus_tag__isnull=False).distinct()
         return model_regulatory_interactions
-    except (Exception, psycopg2.Error) as error:
+    except (Exception) as error:
         lib.log.info("Failed to execute the select into table model_regulatory", error)
         lib.log.info(organism_id)
 
 def select_orthologs_by_target_organism(model_locus_tag, target_organism_id):
-    dbConnection = create_db_connection()
     orthology_list = list()
     try:
-        cursor = dbConnection.cursor()
-        cursor.execute("SELECT DISTINCT model_protein, target_protein from orthology ortho join protein prot on ortho.model_protein = prot.id join gene gen on prot.locus_tag = %s AND gen.organism_accession = %s WHERE ortho.model_protein IS NOT NULL", (model_locus_tag, target_organism_id,))
-        rec = cursor.fetchall()
-        for row in rec:
-            ortho = Orthology(select_protein_by_id(row[0]),select_protein_by_id(row[1]))
-            orthology_list.append(ortho)
-        cursor.close()
-        return orthology_list
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT DISTINCT model_protein, target_protein from orthology ortho join protein prot on ortho.model_protein = prot.id join gene gen on prot.locus_tag = %s AND gen.organism_accession = %s WHERE ortho.model_protein IS NOT NULL", (model_locus_tag, target_organism_id,))
+            rec = cursor.fetchall()
+            for row in rec:
+                ortho = Orthology(select_protein_by_id(row[0]),select_protein_by_id(row[1]))
+                orthology_list.append(ortho)
+            cursor.close()
+            return orthology_list
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to execute the select into table orthology", error)
         lib.log.info(model_locus_tag)

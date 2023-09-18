@@ -9,7 +9,6 @@ from funRegulationTool.task_utils import FunRegulationBaseTask
 from projects.tasks_import import task_import_genes
 from projects.tasks_external_tools import task_run_proteinortho, task_run_rsat
 from api.models import ProjectAnalysisRegistry
-from time import sleep
 
 def analyse_registry(registry):
     if registry is None or type(registry) is not ProjectAnalysisRegistry:
@@ -25,5 +24,10 @@ def task_analyse_registry(self, registry_id):
         if registry.download_organism and registry.proteinortho_analyse and registry.rsat_analyse:
             chain(task_import_genes.si(registry_id, registry.organism_accession) | 
                   task_run_proteinortho.si(registry_id, registry.organism_accession) | 
-                  task_run_rsat.si(registry_id, registry.organism_accession)).apply_async()
+                  task_run_rsat.si(registry_id, registry.organism_accession)
+                  ).apply_async()
+        elif registry.download_organism and registry.proteinortho_analyse:
+            chain(task_import_genes.si(registry_id, registry.organism_accession) |
+                  task_run_proteinortho.si(registry_id, registry.organism_accession)
+                 ).apply_async()
         registry.save()

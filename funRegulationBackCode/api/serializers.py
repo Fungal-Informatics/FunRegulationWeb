@@ -33,8 +33,8 @@ class RegulatoryInteractionSerializer(serializers.ModelSerializer):
     
 class ProjectAnalysisRegistrySerializer(serializers.Serializer):
     organism_accession = serializers.CharField(max_length=150, required=True, allow_blank=False, allow_null=False)
+    proteinOrtho_analyse = serializers.BooleanField(required=True, allow_null=False)
     rsat_analyse = serializers.BooleanField(required=True, allow_null=False)
-    download_organism = serializers.BooleanField(required=True, allow_null=False)
 
 class CreateUserSerializer(serializers.Serializer):
     firstName = serializers.CharField(max_length=30,required=True, allow_blank=False, allow_null=False)
@@ -59,6 +59,9 @@ class UniqueTGsSerializer(serializers.Serializer):
 
 class RequestPasswordEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
+
+class SearchGrnSerializer(serializers.Serializer):
+    organism_accession = serializers.CharField(max_length=100)
 
 class SetNewPasswordSerializer(serializers.Serializer):
     password = serializers.CharField(min_length=6, write_only=True)

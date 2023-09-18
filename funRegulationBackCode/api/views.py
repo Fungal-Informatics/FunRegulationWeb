@@ -1,6 +1,6 @@
 from api.serializers import OrganismSerializer, RegulatoryInteractionSerializer, ProjectAnalysisRegistrySerializer
 from api.serializers import CreateUserSerializer, UniqueTFsSerializer, UniqueTGsSerializer, UserSerializer
-from api.serializers import RequestPasswordEmailSerializer, SetNewPasswordSerializer
+from api.serializers import RequestPasswordEmailSerializer, SetNewPasswordSerializer, SearchGrnSerializer
 from rest_framework import viewsets, permissions, mixins, generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -15,6 +15,7 @@ from projects import tasks_external_tools, tasks_import, tasks_chain
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
+from django_celery_results.models import TaskResult
 import jwt
 from datetime import datetime
 from smtplib import SMTPException
@@ -25,37 +26,39 @@ from django.utils.encoding import smart_str,force_str, smart_bytes, DjangoUnicod
 
 
 class OrganismViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = Organism.objects.all()
+    queryset = Organism.objects.all().filter(is_model=False).order_by('accession')
     serializer_class = OrganismSerializer
     permission_classes = [permissions.IsAuthenticated]
 
 class RegulatoryInteractionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    #permission_classes = [permissions.IsAuthenticated]
-    permission_classes = [permissions.AllowAny]
-    def list(self, request):        
-        accession = self.request.query_params.get('organism_accession')
-        queryset = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
-            .filter(tf_locus_tag__organism_accession=accession)\
-            .distinct()\
-            .order_by('tf_locus_tag','tg_locus_tag')
-        
-        unique_tfs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
-            .filter(tf_locus_tag__organism_accession=accession)\
-            .distinct()\
-            .values('tf_locus_tag')\
-            .order_by('tf_locus_tag','tg_locus_tag').distinct('tf_locus_tag')
-        
-        unique_tgs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
-            .filter(tf_locus_tag__organism_accession=accession)\
-            .distinct()\
-            .values('tg_locus_tag')\
-            .order_by('tg_locus_tag','tf_locus_tag').distinct('tg_locus_tag')
-        
-        unique_tfs = UniqueTFsSerializer(unique_tfs_query, many=True)
-        unique_tgs = UniqueTGsSerializer(unique_tgs_query, many=True)
-        serializer = RegulatoryInteractionSerializer(queryset, many=True)
-        
-        return Response({'tfs': unique_tfs.data, 'tgs': unique_tgs.data, 'edges':serializer.data}, status=status.HTTP_200_OK)
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request, format=None):   
+        serializer = SearchGrnSerializer(data=request.data)
+        if(serializer.is_valid()):
+            data = serializer.data
+            accession = data['organism_accession']
+            queryset = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+                .filter(tf_locus_tag__organism_accession=accession)\
+                .distinct()\
+                .order_by('tf_locus_tag','tg_locus_tag')
+            
+            unique_tfs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+                .filter(tf_locus_tag__organism_accession=accession)\
+                .distinct()\
+                .values('tf_locus_tag')\
+                .order_by('tf_locus_tag','tg_locus_tag').distinct('tf_locus_tag')
+            
+            unique_tgs_query = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+                .filter(tf_locus_tag__organism_accession=accession)\
+                .distinct()\
+                .values('tg_locus_tag')\
+                .order_by('tg_locus_tag','tf_locus_tag').distinct('tg_locus_tag')
+            
+            unique_tfs = UniqueTFsSerializer(unique_tfs_query, many=True)
+            unique_tgs = UniqueTGsSerializer(unique_tgs_query, many=True)
+            serializer = RegulatoryInteractionSerializer(queryset, many=True)
+            
+            return Response({'tfs': unique_tfs.data, 'tgs': unique_tgs.data, 'edges':serializer.data}, status=status.HTTP_200_OK)
 
 class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def post(self, request, format=None):
@@ -65,15 +68,16 @@ class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericView
                 data = serializer.data
                 registry = ProjectAnalysisRegistry(created_by=self.request.user)
                 registry.organism_accession = data['organism_accession']
-                registry.proteinortho_analyse = True
+                registry.proteinortho_analyse = data['proteinOrtho_analyse']
                 registry.rsat_analyse = data['rsat_analyse']
-                registry.download_organism = data['download_organism']
                 registry.save()
-                if(data['download_organism']):
-                    tasks_chain.analyse_registry(registry)
-                else:
+                if((data['organism_accession'] == '') or (data['organism_accession'] is None)):
                     # UPLOAD FILES
-                    pass
+                    registry.download_organism = False
+                else:
+                    registry.download_organism = True
+                    tasks_chain.analyse_registry(registry)
+
             return Response({'registro': registry.pk, 'requisicao':serializer.data}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -240,3 +244,45 @@ class SetNewPasswordViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
         serializer.is_valid(raise_exception=True)
         return Response({'Success': True, 'Message': 'Password reset success'},status=status.HTTP_200_OK)
+    
+class TaskStatusViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    #permission_classes = [permissions.AllowAny]
+    def list(self, request):
+        headers = ["Order analyse","Download organism",'ProteinOrtho','Rsat']
+        index_header = 0
+        result = {
+            "Order analyse": '',
+            "Download organism": '',
+            'ProteinOrtho': '',
+            'Rsat': ''
+        }
+        tasks = list()
+
+        id = self.request.query_params.get('id')
+        item = ProjectAnalysisRegistry.objects.filter(pk=id)\
+               .values('task_id','task_download_organism_id','task_proteinortho_id','task_rsat_id')\
+               .first()
+        
+        task_analyse = TaskResult.objects.filter(pk=item['task_id']).values('status').first()
+        task_download = TaskResult.objects.filter(pk=item['task_download_organism_id']).values('status').first()
+        task_proteinOrtho = TaskResult.objects.filter(pk=item['task_proteinortho_id']).values('status').first()
+        task_rsat = TaskResult.objects.filter(pk=item['task_rsat_id']).values('status').first()
+        tasks.append(task_analyse)
+        tasks.append(task_download)
+        tasks.append(task_proteinOrtho)
+        tasks.append(task_rsat)
+        
+        for task in tasks:
+            if task is not None:
+                if task['status'] == 'PENDING':
+                    result[headers[index_header]] = 'WAITING FOR EXECUTION'
+                elif task['status'] == 'STARTED':
+                    result[headers[index_header]] = 'EXECUTING'
+                elif task['status'] == 'FAILURE':
+                    result[headers[index_header]] = 'ERROR'
+                elif task['status'] == 'SUCCESS':
+                    result[headers[index_header]] = 'COMPLETED'
+            index_header += 1
+        
+        return Response(result, status=status.HTTP_200_OK)
