@@ -1,4 +1,5 @@
 import logging
+import root.lib.library as lib
 from django.conf import settings
 import os.path
 from zipfile import ZipFile
@@ -16,15 +17,6 @@ from ncbi.datasets import GenomeApi as DatasetsGenomeApi
 from ncbi.datasets.metadata.genome import get_assembly_metadata_by_bioproject_accessions
 
 from ncbi.datasets.package import dataset
-from time import sleep
-
-
-# def import_genes(import_registry):
-#     if import_registry is None or type(import_registry) is not ProjectAnalysisRegistry:
-#         raise ValueError('registry should be an instance of ProjectAnalysisRegistry')
-#     result = task_import_genes.apply_async((import_registry.organism_accession,))
-#     import_registry.task = TaskResult.objects.get(task_id=result.task_id)
-#     import_registry.save()
 
 @shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
 def task_import_genes(self, registry_id, organism_accession):
@@ -34,7 +26,7 @@ def task_import_genes(self, registry_id, organism_accession):
     download_path = settings.NCBI_DOWNLOAD_PATH
     accessions: List[str] = [organism_accession]
     zipfile_name = organism_accession+".zip"
-
+    
     if not os.path.exists(download_path+organism_accession):
         os.makedirs(download_path+organism_accession)
     
@@ -44,6 +36,7 @@ def task_import_genes(self, registry_id, organism_accession):
         genome_api = DatasetsGenomeApi(api_client)
         try:
             print("Begin download of genome data package ...")
+            lib.log.info(f"Begin download of genome {organism_accession} data package ...")
             genome_ds_download = genome_api.download_assembly_package(
                 accessions,
                 include_annotation_type=["PROT_FASTA", "GENOME_GFF", "GENOME_GBFF"],
@@ -53,6 +46,7 @@ def task_import_genes(self, registry_id, organism_accession):
             with open(save_path, "wb") as f:
                 f.write(genome_ds_download.data)
             print(f"Download completed -- see {zipfile_name}")
+            lib.log.info(f"Download completed of genome {organism_accession}")
             work_dir = download_path+organism_accession
             os.chdir(work_dir)
             with ZipFile(save_path, 'r') as zip:
