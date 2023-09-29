@@ -35,8 +35,8 @@ class Promoter:
     Class defining a Protein
 """
 class Protein:
-    def __init__(self, assembly_accession, locus_tag, id, product, interpro, pfam, go, gene3d, reactome, panther, uniprot, ec_number, cazy, uniparc):
-        self.assembly_accession = assembly_accession
+    def __init__(self, organism_accession, locus_tag, id, product, interpro, pfam, go, gene3d, reactome, panther, uniprot, ec_number, cazy):
+        self.organism_accession = organism_accession
         self.locus_tag = locus_tag
         self.id = id
         self.product = product
@@ -49,7 +49,6 @@ class Protein:
         self.uniprot = uniprot
         self.ec_number = ec_number
         self.cazy = cazy
-        self.uniparc = uniparc
 
 """
     Class defining an Orthology
@@ -68,9 +67,9 @@ class Orthology:
     Class defining a PWM
 """
 class Pwm:
-    def __init__(self, id, assembly_accession, locus_tag, motif_id, status, tf_family, motif_type, msource_author, msource, pubmedid):
+    def __init__(self, id, organism_accession, locus_tag, motif_id, status, tf_family, motif_type, msource_author, msource, pubmedid):
         self.id = id
-        self.assembly_accession = assembly_accession
+        self.organism_accession = organism_accession
         self.locus_tag = locus_tag
         self.motif_id = motif_id
         self.status = status
@@ -84,9 +83,9 @@ class Pwm:
     Class defining a Model Regulatory Interaction
 """
 class ModelRegulatory:
-    def __init__(self, id, assembly_accession, tf_locus_tag, tg_locus_tag, regulatory_function, evidence, experiment, experimental_condition, pubmedid, publication):
+    def __init__(self, id, organism_accession, tf_locus_tag, tg_locus_tag, regulatory_function, evidence, experiment, experimental_condition, pubmedid, publication):
         self.id = id
-        self.assembly_accession = assembly_accession
+        self.organism_accession = organism_accession
         self.tf_locus_tag = tf_locus_tag
         self.tg_locus_tag = tg_locus_tag
         self.regulatory_function = regulatory_function
