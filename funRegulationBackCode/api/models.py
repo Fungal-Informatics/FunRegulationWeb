@@ -14,16 +14,16 @@ class Gene(models.Model):
     organism_accession = models.ForeignKey('Organism', models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='org_accession')
     locus_tag = models.CharField(primary_key=True, max_length=255, db_column='locus_tag')
     symbol_gene = models.CharField(max_length=255, blank=True, null=True)
-    #description = models.CharField(max_length=500, blank=True, null=True)
     is_tf = models.BooleanField(blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag'], name='unique_gene')]
         db_table = 'gene'
 
 class ModelRegulatory(models.Model):
-    tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='gene_tf_locus_tag')
-    tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='gene_tg_locus_tag')
+    organism_accession = models.ForeignKey('Organism', models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='mr_gene_organism_accession')
+    tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='mr_gene_tf_locus_tag')
+    tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='mr_gene_tg_locus_tag')
     regulatory_function = models.CharField(max_length=255, blank=True, null=True)
     evidence = models.CharField(max_length=255, blank=True, null=True)
     experiment = models.CharField(max_length=255, blank=True, null=True)
@@ -32,58 +32,9 @@ class ModelRegulatory(models.Model):
     publication = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [models.UniqueConstraint(fields=['organism_accession','tf_locus_tag','tg_locus_tag'], 
+                                               name='unique_model_regulatory')]
         db_table = 'model_regulatory'
-
-# class Project(models.Model):
-#     name = models.CharField(max_length=100)
-#     strain = models.CharField(max_length=10)
-#     description = models.CharField(max_length=1000, null=True, blank=True)
-#     locus_prefix = models.CharField(max_length=10)
-#     transcript_suffix_type = models.IntegerField()
-#     contig_prefix = models.CharField(max_length=20)
-#     date_created = models.DateTimeField(auto_now_add=True)
-#     created_by = models.ForeignKey(User, related_name='projects', on_delete=models.PROTECT)
-#     removed = models.BooleanField(default=False)
-#     date_removed = models.DateTimeField(null=True, blank=True)
-#     removed_by = models.ForeignKey(User, null=True, blank=True,
-#                                    related_name='projects_removed', on_delete=models.PROTECT)    
-
-#     def __str__(self):
-#         return self.name
-
-#     def get_qtd_pending_analysis(self, distinct_feature=False):
-#         fields = task_status_utils.get_analysis_fields()
-#         features = OrganismFeature.objects.filter(funregulationtools_utils.get_valid_feature_filters(self))
-#         features = task_status_utils.get_feature_status_statistic(features)\
-#             .filter(task_status_utils.has_analysis_in_progress_filter())
-#         if distinct_feature:
-#             return features.count()
-
-#         aggregations = {}
-#         for field in fields:
-#             features = features.annotate(**{
-#                 'qtd_%s' % field: Case(When(**{'last_%s_analysis_in_progress' % field: True}, then=1),
-#                                        default=0, output_field=IntegerField())
-#             })
-#             aggregations['total_%s' % field] = Sum('qtd_%s' % field)
-#         totals = features.aggregate(**aggregations)
-#         total = 0
-#         for field in fields:
-#             t = totals.get('total_%s' % field, 0)
-#             if t is None:
-#                 t = 0
-#             total += t
-#         return total
-
-#     def has_pending_analysis(self):
-#         return self.get_qtd_pending_analysis() > 0
-
-#     def has_pending_imports(self):
-#         return self.gene_imports.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
-
-#     def has_pending_exports(self):
-#         return self.export_registries.filter(~Q(task__status__in=task_utils.get_task_status_finished())).count() > 0
 
 class Organism(models.Model):
     accession = models.CharField(primary_key=True, max_length=255)
@@ -99,7 +50,8 @@ class Organism(models.Model):
         return self.accession
 
 class Protein(models.Model):
-    locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True, related_name='gene_locus_tag')
+    organism_accession = models.ForeignKey(Organism, models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='prot_gene_organism_accession')
+    locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True, related_name='prot_gene_locus_tag')
     id = models.CharField(primary_key=True, max_length=255)
     product = models.CharField(max_length=255, blank=True, null=True)
     interpro = models.CharField(max_length=255, blank=True, null=True)
@@ -111,29 +63,41 @@ class Protein(models.Model):
     uniprot = models.CharField(max_length=255, blank=True, null=True)
     ec_number = models.CharField(max_length=255, blank=True, null=True)
     cazy = models.CharField(max_length=255, blank=True, null=True)
-    uniparc = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag'], name='unique_protein')]
         db_table = 'protein'
 
 class Orthology(models.Model):
-    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, related_name='protein_model_protein', primary_key=True)
-    target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='protein_target_protein')
+    model_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='model_organism_accession', null=True,related_name='ort_model_organism_accession', default='')
+    model_locus_tag = models.ForeignKey(Protein,models.DO_NOTHING, db_column='model_locus_tag', null=True,related_name='ort_model_locus_tag', default='')
+    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, related_name='ort_protein_model_protein')
+    target_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING, db_column='target_organism_accession', null=True,related_name='ort_target_organism_accession', default='')
+    target_locus_tag = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_locus_tag', null=True,related_name='ort_target_locus_tag', default='')
+    target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='ort_protein_target_protein', default='')
 
     class Meta:
-        managed = False
+        constraints = [
+            models.UniqueConstraint(fields=['model_organism_accession','model_locus_tag','model_protein',
+                                            'target_organism_accession','target_locus_tag','target_protein'], 
+                                            name='unique_orthology')]
         db_table = 'orthology'
 
 class Promoter(models.Model):
-    locus_tag = models.OneToOneField(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, primary_key=True, default='')
-    strand = models.CharField(max_length=1, blank=True, null=True)
+    organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='organism_accession', related_name='prot_organism_accession', blank=True)
+    locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, primary_key=True)
+    strand = models.CharField(max_length=3, blank=True, null=True)
     source = models.CharField(max_length=255, blank=True, null=True)
     start = models.IntegerField(blank=True, null=True)
     stop = models.IntegerField(blank=True, null=True)
-    promoter_seq = models.CharField(max_length=255, blank=True, null=True)
+    promoter_seq = models.TextField(blank=True, null=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag'], name='unique_promoter')]
+        db_table = 'promoter'
 
 class Pwm(models.Model):
+    organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='organism_accession', default='')
     locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='locus_tag', blank=True, null=True)
     motif_id = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=1, blank=True, null=True)
@@ -144,21 +108,27 @@ class Pwm(models.Model):
     pubmedid = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag'], name='unique_pwm')]
         db_table = 'pwm'
 
 class RegulatoryInteraction(models.Model):
-    tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='tf_locus_tag')
-    tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='tg_locus_tag')
+    organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='organism_accession', default='')
+    tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='reg_tf_locus_tag')
+    tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='reg_tg_locus_tag')
     regulatory_function = models.CharField(max_length=255, blank=True, null=True)
     pubmedid_source = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [
+            models.UniqueConstraint(fields=['organism_accession','tf_locus_tag','tg_locus_tag'], 
+                                            name='unique_regulatory_interaction')]
         db_table = 'regulatory_interaction'
 
 class Tfbs(models.Model):
     regulatory_interaction = models.ForeignKey(RegulatoryInteraction, models.DO_NOTHING, blank=True, null=True)
+    organism_accession = models.ForeignKey(Gene, models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='tfbs_gene_organism_accession')
+    tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='tfbs_gene_tf_locus_tag')
+    tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='tfbs_gene_tg_locus_tag')
     pwm = models.ForeignKey(Pwm, models.DO_NOTHING, blank=True, null=True)
     strand = models.CharField(max_length=255, blank=True, null=True)
     start = models.CharField(max_length=255, blank=True, null=True)
@@ -170,42 +140,21 @@ class Tfbs(models.Model):
     sig = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        managed = False
+        constraints = [
+            models.UniqueConstraint(fields=['regulatory_interaction','organism_accession',
+                                            'tf_locus_tag','tg_locus_tag'], 
+                                            name='unique_tfbs')]
         db_table = 'tfbs'
-    
-# class OrganismFeature(models.Model):
-#     organism = models.ForeignKey(Organism, related_name='features', on_delete=models.PROTECT)
-#     feature_id = models.CharField(null=True, blank=True, max_length=20)
-#     feature = models.CharField(null=True, blank=True, max_length=10)
-#     last_proteinortho_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
-#                                               related_name='last_gene_feature_proteinortho',
-#                                               null=True, blank=True, on_delete=models.SET_NULL)
-#     last_rsat_registry = models.OneToOneField('ProjectAnalysisRegistryItem',
-#                                                   related_name='last_gene_feature_rsat',
-#                                                   null=True, blank=True, on_delete=models.SET_NULL)
-#     removed = models.BooleanField(default=False)
-#     date_removed = models.DateTimeField(null=True, blank=True)
-#     removed_by = models.ForeignKey(User, null=True, blank=True,
-#                                    related_name='features_removed', on_delete=models.PROTECT)
 
-#     def has_analysis_in_progress(self):
-#         """
-#         Return whether this feature has an analysis process in progress.
-#         """
-#         return self.last_proteinortho_analysis_in_progress or \
-#                self.last_rsat_analysis_in_progress
+class Teste(models.Model):
+    model_protein = models.CharField(max_length=255, db_column='target_locus_tag')
+    target_protein = models.CharField(max_length=255, db_column='target_protein')
 
-#     def has_analysis_with_error(self):
-#         """
-#         Return whether this feature has an analysis process which returned an error.
-#         """
-#         return (self.last_proteinortho_registry
-#                 and not self.last_proteinortho_analysis_in_progress and not self.last_proteinortho_analysis_ok) or \
-#                (self.last_rsat_registry
-#                 and not self.last_rsat_analysis_in_progress and not self.last_rsat_analysis_ok)
-
-#     def __str__(self):
-#         return self.feature_id
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['model_protein','target_protein'], 
+                                            name='unique_orthology_teste')]
+        db_table = 'teste'
   
 class ProjectAnalysisRegistry(models.Model):
     active = models.BooleanField(default=True)
