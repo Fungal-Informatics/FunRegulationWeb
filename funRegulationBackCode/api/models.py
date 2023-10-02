@@ -65,21 +65,21 @@ class Protein(models.Model):
     cazy = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag'], name='unique_protein')]
+        constraints = [models.UniqueConstraint(fields=['organism_accession','locus_tag', 'id'], name='unique_protein')]
         db_table = 'protein'
 
 class Orthology(models.Model):
     model_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='model_organism_accession', null=True,related_name='ort_model_organism_accession', default='')
-    model_locus_tag = models.ForeignKey(Protein,models.DO_NOTHING, db_column='model_locus_tag', null=True,related_name='ort_model_locus_tag', default='')
-    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', blank=True, related_name='ort_protein_model_protein')
+    model_locus_tag = models.ForeignKey(Gene,models.DO_NOTHING, db_column='model_locus_tag', null=True,related_name='ort_model_locus_tag', default='')
+    model_protein = models.ManyToManyField(Protein, related_name='ort_protein_model_protein')
     target_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING, db_column='target_organism_accession', null=True,related_name='ort_target_organism_accession', default='')
-    target_locus_tag = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_locus_tag', null=True,related_name='ort_target_locus_tag', default='')
-    target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', blank=True, null=True, related_name='ort_protein_target_protein', default='')
+    target_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='target_locus_tag', null=True,related_name='ort_target_locus_tag', default='')
+    target_protein = models.ManyToManyField(Protein, related_name='ort_protein_target_protein')
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['model_organism_accession','model_locus_tag','model_protein',
-                                            'target_organism_accession','target_locus_tag','target_protein'], 
+            models.UniqueConstraint(fields=['id','model_organism_accession','model_locus_tag',
+                                            'target_organism_accession','target_locus_tag'], 
                                             name='unique_orthology')]
         db_table = 'orthology'
 
@@ -120,13 +120,13 @@ class RegulatoryInteraction(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=['organism_accession','tf_locus_tag','tg_locus_tag'], 
+            models.UniqueConstraint(fields=['id','organism_accession','tf_locus_tag','tg_locus_tag'], 
                                             name='unique_regulatory_interaction')]
         db_table = 'regulatory_interaction'
 
 class Tfbs(models.Model):
     regulatory_interaction = models.ForeignKey(RegulatoryInteraction, models.DO_NOTHING, blank=True, null=True)
-    organism_accession = models.ForeignKey(Gene, models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='tfbs_gene_organism_accession')
+    organism_accession = models.ForeignKey(Organism, models.DO_NOTHING, db_column='organism_accession', blank=True, null=True, related_name='tfbs_gene_organism_accession')
     tf_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tf_locus_tag', blank=True, null=True, related_name='tfbs_gene_tf_locus_tag')
     tg_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='tg_locus_tag', blank=True, null=True, related_name='tfbs_gene_tg_locus_tag')
     pwm = models.ForeignKey(Pwm, models.DO_NOTHING, blank=True, null=True)

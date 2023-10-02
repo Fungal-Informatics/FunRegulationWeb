@@ -9,6 +9,7 @@ from Bio import SeqIO
 from django.conf import settings
 from BCBio import GFF
 from django.db import transaction, connection
+from time import sleep
 
 upstream = -1000
 downstream = 0
@@ -305,29 +306,31 @@ def insert_orthology(orthology):
 
 def construct_grn_orthology(model_organism_accession, target_organism_accession):
     model_regulatory_interactions = select_model_regulatory_by_organism_id(model_organism_accession)
-    
+
     for model_regulatory in model_regulatory_interactions:
         tf = model_regulatory.tf_locus_tag.locus_tag
         tg = model_regulatory.tg_locus_tag.locus_tag
         rf_value = model_regulatory.regulatory_function
         pubmed_value = model_regulatory.pubmedid
-        
-        tf_orthologs = select_orthologs_by_target_organism(tf, target_organism_accession)
-        tg_orthologs = select_orthologs_by_target_organism(tg, target_organism_accession)
-        if len(tf_orthologs)!=0 and len(tg_orthologs)!=0:
-            for ortholog_tf in tf_orthologs:
-                for ortholog_tg in tg_orthologs:
-                    model_protein = ortholog_tf._meta.get_field('model_protein')
-                    ortho_tf = model_protein.value_from_object(ortholog_tf)
 
-                    target_protein = ortholog_tg._meta.get_field('target_protein')
-                    ortho_tg = target_protein.value_from_object(ortholog_tg)
-
-                    regulatory_interaction = RegulatoryInteraction(tf_locus_tag=Gene.objects.get(locus_tag=ortho_tf), tg_locus_tag=Gene.objects.get(locus_tag=ortho_tg), regulatory_function=rf_value, pubmedid_source=pubmed_value)
-                    regulatory_interaction.save()
-                    
-                    #update gene as TF
-                    Gene.objects.filter(pk=ortho_tg).update(is_tf=True)
+        tf_orthologs = select_orthologs_by_target_organism_tf(tf, target_organism_accession)
+        tg_orthologs = select_orthologs_by_target_organism_tg(tg, target_organism_accession)
+        if(tf_orthologs is not None and tg_orthologs is not None):
+            if len(tf_orthologs)!=0 and len(tg_orthologs)!=0:
+                for ortholog_tf in tf_orthologs:
+                    for ortholog_tg in tg_orthologs:
+                        ortho_tf = ortholog_tf.locus_tag.locus_tag
+                        ortho_tg = ortholog_tg.locus_tag.locus_tag
+                        try:
+                            regulatory_interaction = RegulatoryInteraction(organism_accession = Organism.objects.get(accession = target_organism_accession) ,
+                                                                    tf_locus_tag = Gene.objects.get(locus_tag = ortho_tf), 
+                                                                    tg_locus_tag = Gene.objects.get(locus_tag = ortho_tg), 
+                                                                    regulatory_function = rf_value, pubmedid_source = pubmed_value)
+                            regulatory_interaction.save()
+                        except(Exception, psycopg2.Error) as error:
+                            lib.log.info(error)
+                        #update gene as TF
+                        Gene.objects.filter(pk=ortho_tg).update(is_tf=True)
 
 def select_model_regulatory_by_organism_id(organism_id):
     model_regulatory_interactions = list()
@@ -340,17 +343,33 @@ def select_model_regulatory_by_organism_id(organism_id):
         lib.log.info("Failed to execute the select into table model_regulatory", error)
         lib.log.info(organism_id)
 
-def select_orthologs_by_target_organism(model_locus_tag, target_organism_id):
-    orthology_list = list()
+def select_orthologs_by_target_organism_tf(model_locus_tag, target_organism_id):
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT DISTINCT model_protein, target_protein from orthology ortho join protein prot on ortho.model_protein = prot.id join gene gen on prot.locus_tag = %s AND gen.organism_accession = %s WHERE ortho.model_protein IS NOT NULL", (model_locus_tag, target_organism_id,))
-            rec = cursor.fetchall()
-            for row in rec:
-                ortho = Orthology(select_protein_by_id(row[0]),select_protein_by_id(row[1]))
-                orthology_list.append(ortho)
-            cursor.close()
-            return orthology_list
+        orthologies = Orthology.objects.filter(target_organism_accession__accession=target_organism_id,
+                                               model_locus_tag__locus_tag=model_locus_tag)
+        if(orthologies.count() <= 0):
+            return None
+        
+        for row in orthologies:
+            model_proteins = row.model_protein.all()
+
+        return model_proteins
+    except (Exception, psycopg2.Error) as error:
+        lib.log.info("Failed to execute the select into table orthology", error)
+        lib.log.info(model_locus_tag)
+
+def select_orthologs_by_target_organism_tg(model_locus_tag, target_organism_id):
+    try:
+        orthologies = Orthology.objects.filter(target_organism_accession__accession=target_organism_id,
+                                               model_locus_tag__locus_tag=model_locus_tag)
+        
+        if(orthologies.count() <= 0):
+            return None
+        
+        for row in orthologies:
+            target_proteins = row.target_protein.all()
+
+        return target_proteins
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to execute the select into table orthology", error)
         lib.log.info(model_locus_tag)
@@ -410,8 +429,8 @@ def update_gene(gene):
                      str(gene.description) + " " +
                      str(gene.is_tf))
 
-def gbff_handler(assembly_accession, in_file_target_genome):
-    lib.log.info("Parsing " + assembly_accession + in_file_target_genome)
+def gbff_handler(organism_accession, in_file_target_genome):
+    lib.log.info("Parsing " + organism_accession + in_file_target_genome)
     recordCount = 0
     promoters_partially_extracted = 0
 
@@ -428,7 +447,8 @@ def gbff_handler(assembly_accession, in_file_target_genome):
                         symbol_gene = str(symbol_gene[0])
                     is_tf = False
 
-                    gene = Gene(organism_accession=Organism.objects.get(accession=assembly_accession),locus_tag=locus_tag,symbol_gene=symbol_gene,is_tf=is_tf)
+                    gene = Gene(organism_accession=Organism.objects.get(accession=organism_accession),
+                                locus_tag=locus_tag,symbol_gene=symbol_gene,is_tf=is_tf)
                     gene.save()
                     recordCount+=1
                     
@@ -442,12 +462,18 @@ def gbff_handler(assembly_accession, in_file_target_genome):
                         if mystart+upstream > 0 :
                             promoter_seq = seq_record.seq[mystart+upstream:mystart+downstream]
                             promoter_seq = str(promoter_seq)
-                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=mystart+upstream, stop=mystart+downstream,promoter_seq=promoter_seq)
+                            promoter = Promoter(organism_accession=Organism.objects.get(accession=organism_accession),
+                                                locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
+                                                source=seq_record.id, start=mystart+upstream, stop=mystart+downstream,
+                                                promoter_seq=promoter_seq)
                         else:
                             # incomplete promoters
                             promoter_seq = seq_record.seq[1:mystart+downstream]
                             promoter_seq = str(promoter_seq)
-                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=1, stop=mystart+downstream, promoter_seq=promoter_seq)
+                            promoter = Promoter(organism_accession=Organism.objects.get(accession=organism_accession),
+                                                locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
+                                                source=seq_record.id, start=1, stop=mystart+downstream, 
+                                                promoter_seq=promoter_seq)
                             lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                             promoters_partially_extracted += 1
                     else:
@@ -455,13 +481,19 @@ def gbff_handler(assembly_accession, in_file_target_genome):
                             promoter_seq = seq_record.seq[myend-downstream:myend-upstream]
                             promoter_seq = promoter_seq.reverse_complement()
                             promoter_seq = str(promoter_seq)
-                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=myend-upstream, stop=myend-downstream, promoter_seq=promoter_seq)
+                            promoter = Promoter(organism_accession=Organism.objects.get(accession=organism_accession),
+                                                locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
+                                                source=seq_record.id, start=myend-upstream, stop=myend-downstream, 
+                                                promoter_seq=promoter_seq)
                         else:
                             # incomplete promoters
                             promoter_seq = seq_record.seq[myend-downstream:len(seq_record)]
                             promoter_seq = promoter_seq.reverse_complement()
                             promoter_seq = str(promoter_seq)
-                            promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, source=seq_record.id, start=len(seq_record), stop=myend-downstream, promoter_seq=promoter_seq)
+                            promoter = Promoter(organism_accession=Organism.objects.get(accession=organism_accession),
+                                                locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
+                                                source=seq_record.id, start=len(seq_record), stop=myend-downstream, 
+                                                promoter_seq=promoter_seq)
                             lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                             promoters_partially_extracted += 1
                     promoter.save()
@@ -504,7 +536,10 @@ def gbff_handler(assembly_accession, in_file_target_genome):
                                     uniprot = value.split(':')[1]
                                 else:
                                     uniprot = uniprot+','+value.split(':')[1]
-                    protein = Protein(locus_tag=Gene.objects.get(locus_tag=locus_tag), id=protein_id, product=product, interpro=interpro, pfam=pfam, go='',gene3d='',reactome='',panther='',uniprot=uniprot, ec_number=ec_number, cazy='',uniparc='')
+                    protein = Protein(organism_accession=Organism.objects.get(accession=organism_accession),
+                                      locus_tag=Gene.objects.get(locus_tag=locus_tag), id=protein_id, 
+                                      product=product, interpro=interpro, pfam=pfam, go='',gene3d='',
+                                      reactome='', panther='',uniprot=uniprot, ec_number=ec_number, cazy='')
                     protein.save()
                     
         lib.log.info("%d genes were found" % recordCount)

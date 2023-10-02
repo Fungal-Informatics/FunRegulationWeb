@@ -6,6 +6,7 @@ import urllib.parse
 import os.path
 from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, gbff_handler, construct_grn_orthology
+from time import sleep
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
@@ -34,12 +35,12 @@ class ProteinOrthoAnalyseEngine:
 
             proc = Popen(command, stdout=PIPE, stderr=PIPE)
             output, error = proc.communicate()
-            
+
             filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
             ret = proc.returncode
 
             if ret != 0:
-                logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output )
+                logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output)
                 self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
             else:
                 with open(filename) as in_file:
@@ -59,10 +60,18 @@ class ProteinOrthoAnalyseEngine:
                                 if (record_model != '*' and record_target != '*'):
                                     model_protein = select_protein_by_id(record_model)
                                     target_protein = select_protein_by_id(record_target)
-                                    orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
+
+                                    orthology = Orthology(model_organism_accession = Organism.objects.get(accession=model_organism[1]),
+                                                          model_locus_tag = Gene.objects.get(locus_tag=model_protein),
+                                                          target_organism_accession = Organism.objects.get(accession=organism_accession),
+                                                          target_locus_tag = Gene.objects.get(locus_tag=target_protein))
 
                                     if(orthology != None):
                                         orthology.save()
+                                        all_model_proteins = Protein.objects.filter(locus_tag=model_protein).all()
+                                        all_target_proteins = Protein.objects.filter(locus_tag=target_protein).all()
+                                        orthology.model_protein.set(all_model_proteins)
+                                        orthology.target_protein.set(all_target_proteins)
 
                 in_file.close()
                 construct_grn_orthology(model_organism[1], organism_accession)
