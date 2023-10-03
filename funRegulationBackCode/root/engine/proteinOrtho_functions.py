@@ -281,13 +281,12 @@ def parse_protein_file(in_file_proteins):
         protein.save()
         
 def select_protein_by_id(protein_id):
-    protein = Protein.objects.filter(id=protein_id).values('locus_tag')
+    protein = Protein.objects.filter(id=protein_id).first()
     
-    if(len(protein) > 0):
-        for locus_tag_value in protein:
-            locus_tag = locus_tag_value['locus_tag']
-
-    return locus_tag
+    if(protein is not None):
+        return protein
+    else:
+        return None
 
 def insert_orthology(orthology):
     dbConnection = create_db_connection()
@@ -313,14 +312,14 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
         rf_value = model_regulatory.regulatory_function
         pubmed_value = model_regulatory.pubmedid
 
-        tf_orthologs = select_orthologs_by_target_organism_tf(tf, target_organism_accession)
-        tg_orthologs = select_orthologs_by_target_organism_tg(tg, target_organism_accession)
+        tf_orthologs = select_orthologs_by_target_organism(tf, target_organism_accession, model_organism_accession)
+        tg_orthologs = select_orthologs_by_target_organism(tg, target_organism_accession, model_organism_accession)
         if(tf_orthologs is not None and tg_orthologs is not None):
             if len(tf_orthologs)!=0 and len(tg_orthologs)!=0:
                 for ortholog_tf in tf_orthologs:
                     for ortholog_tg in tg_orthologs:
-                        ortho_tf = ortholog_tf.locus_tag.locus_tag
-                        ortho_tg = ortholog_tg.locus_tag.locus_tag
+                        ortho_tf = ortholog_tf.target_locus_tag.locus_tag
+                        ortho_tg = ortholog_tg.target_locus_tag.locus_tag
                         try:
                             regulatory_interaction = RegulatoryInteraction(organism_accession = Organism.objects.get(accession = target_organism_accession) ,
                                                                     tf_locus_tag = Gene.objects.get(locus_tag = ortho_tf), 
@@ -343,7 +342,8 @@ def select_model_regulatory_by_organism_id(organism_id):
         lib.log.info("Failed to execute the select into table model_regulatory", error)
         lib.log.info(organism_id)
 
-def select_orthologs_by_target_organism_tf(model_locus_tag, target_organism_id):
+def select_orthologs_by_target_organism(model_locus_tag, target_organism_id, model_organism_id):
+    orthology_list = list()
     try:
         orthologies = Orthology.objects.filter(target_organism_accession__accession=target_organism_id,
                                                model_locus_tag__locus_tag=model_locus_tag)
@@ -351,25 +351,18 @@ def select_orthologs_by_target_organism_tf(model_locus_tag, target_organism_id):
             return None
         
         for row in orthologies:
-            model_proteins = row.model_protein.all()
-
-        return model_proteins
-    except (Exception, psycopg2.Error) as error:
-        lib.log.info("Failed to execute the select into table orthology", error)
-        lib.log.info(model_locus_tag)
-
-def select_orthologs_by_target_organism_tg(model_locus_tag, target_organism_id):
-    try:
-        orthologies = Orthology.objects.filter(target_organism_accession__accession=target_organism_id,
-                                               model_locus_tag__locus_tag=model_locus_tag)
+            model_protein = select_protein_by_id(row.model_protein.id)
+            target_protein = select_protein_by_id(row.target_protein.id)
+            ortho = Orthology(model_organism_accession = Organism.objects.get(accession=model_organism_id),
+                                                          model_locus_tag = Gene.objects.get(locus_tag=model_protein.locus_tag.locus_tag),
+                                                          model_protein = Protein.objects.get(id=model_protein.id),
+                                                          target_organism_accession = Organism.objects.get(accession=target_organism_id),
+                                                          target_locus_tag = Gene.objects.get(locus_tag=target_protein.locus_tag.locus_tag),
+                                                          target_protein = Protein.objects.get(id=target_protein.id))
+            
+            orthology_list.append(ortho)
+        return orthology_list
         
-        if(orthologies.count() <= 0):
-            return None
-        
-        for row in orthologies:
-            target_proteins = row.target_protein.all()
-
-        return target_proteins
     except (Exception, psycopg2.Error) as error:
         lib.log.info("Failed to execute the select into table orthology", error)
         lib.log.info(model_locus_tag)

@@ -71,15 +71,16 @@ class Protein(models.Model):
 class Orthology(models.Model):
     model_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING,db_column='model_organism_accession', null=True,related_name='ort_model_organism_accession', default='')
     model_locus_tag = models.ForeignKey(Gene,models.DO_NOTHING, db_column='model_locus_tag', null=True,related_name='ort_model_locus_tag', default='')
-    model_protein = models.ManyToManyField(Protein, related_name='ort_protein_model_protein')
+    model_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='model_protein', related_name='model_protein', default='')
     target_organism_accession = models.ForeignKey(Organism, models.DO_NOTHING, db_column='target_organism_accession', null=True,related_name='ort_target_organism_accession', default='')
     target_locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, db_column='target_locus_tag', null=True,related_name='ort_target_locus_tag', default='')
-    target_protein = models.ManyToManyField(Protein, related_name='ort_protein_target_protein')
+    target_protein = models.ForeignKey(Protein, models.DO_NOTHING, db_column='target_protein', related_name='target_protein' , default='')
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['id','model_organism_accession','model_locus_tag',
-                                            'target_organism_accession','target_locus_tag'], 
+                                            'target_organism_accession','target_locus_tag',
+                                            'model_protein','target_protein'], 
                                             name='unique_orthology')]
         db_table = 'orthology'
 

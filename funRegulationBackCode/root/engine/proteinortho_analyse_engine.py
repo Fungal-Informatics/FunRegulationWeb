@@ -62,17 +62,15 @@ class ProteinOrthoAnalyseEngine:
                                     target_protein = select_protein_by_id(record_target)
 
                                     orthology = Orthology(model_organism_accession = Organism.objects.get(accession=model_organism[1]),
-                                                          model_locus_tag = Gene.objects.get(locus_tag=model_protein),
+                                                          model_locus_tag = Gene.objects.get(locus_tag=model_protein.locus_tag.locus_tag),
+                                                          model_protein = Protein.objects.get(id=model_protein.id),
                                                           target_organism_accession = Organism.objects.get(accession=organism_accession),
-                                                          target_locus_tag = Gene.objects.get(locus_tag=target_protein))
+                                                          target_locus_tag = Gene.objects.get(locus_tag=target_protein.locus_tag.locus_tag),
+                                                          target_protein = Protein.objects.get(id=target_protein.id))
 
                                     if(orthology != None):
                                         orthology.save()
-                                        all_model_proteins = Protein.objects.filter(locus_tag=model_protein).all()
-                                        all_target_proteins = Protein.objects.filter(locus_tag=target_protein).all()
-                                        orthology.model_protein.set(all_model_proteins)
-                                        orthology.target_protein.set(all_target_proteins)
-
+                                        
                 in_file.close()
                 construct_grn_orthology(model_organism[1], organism_accession)
                 self.__set_analysed(item)
