@@ -41,6 +41,7 @@ class ProteinOrthoAnalyseEngine:
 
             if ret != 0:
                 logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output)
+                logging.info(error)
                 self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
             else:
                 with open(filename) as in_file:
@@ -113,7 +114,8 @@ class ProteinOrthoAnalyseEngine:
     @staticmethod
     def __set_error(item, error_type):
         item.proteinortho_error = error_type
-        item.save(update_fields=['proteinortho_error'])
+        item.proteinortho_analysed = False
+        item.save(update_fields=['proteinortho_error','proteinortho_analysed'])
 
     @staticmethod
     def __set_analysed(item):

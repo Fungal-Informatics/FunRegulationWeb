@@ -19,7 +19,7 @@ FNULL = open(os.devnull, 'w')
 cmd_args = " ".join(sys.argv)+'\n'
 lib.log.debug(cmd_args)
 
-def parse_pwm_file(in_file_pwm):
+def parse_pwm_file(in_file_pwm, organism_accession):
     lib.log.info("Parsing "+ in_file_pwm)
     with open(in_file_pwm) as in_file:
         for line in in_file:
@@ -38,7 +38,10 @@ def parse_pwm_file(in_file_pwm):
                 pubmedid = urllib.parse.unquote(line_parts[19])
                 if pubmedid == 'NULL':
                     pubmedid = ''
-                pwm = Pwm(locus_tag=Gene.objects.get(locus_tag=locus_tag), motif_id=motif_id, status=status, tf_family=tf_family, motif_type=motif_type, msource_author=msource_author, msource=msource, pubmedid=pubmedid)
+                pwm = Pwm(organism_accession = Organism.objects.get(accession = organism_accession), 
+                          locus_tag = Gene.objects.get(locus_tag = locus_tag), motif_id = motif_id, status = status, 
+                          tf_family = tf_family, motif_type = motif_type, msource_author = msource_author, 
+                          msource = msource, pubmedid = pubmedid)
                 pwm.save()
     in_file.close()
     lib.log.info(in_file_pwm + " parsed correctly")
@@ -70,24 +73,6 @@ def select_regulatory_interactions_by_tf_locus_tag(tf_locus_tag):
         lib.log.info("Failed to execute the select into table regulatory_interaction", error)
         lib.log.info(tf_locus_tag)
 
-def extract_promoter(genome, tg_locus_tag):
-    promoter = select_promoter_by_locus_tag(tg_locus_tag)
-
-    long_seq_record= genome[promoter.source]
-    print(long_seq_record)
-    # long_seq = long_seq_record.seq
-    # short_seq = str(long_seq)[promoter.start:promoter.stop]
-    # if promoter.strand == '-':
-    #     short_seq = str(long_seq)[promoter.stop:promoter.start]
-    #     my_dna = Seq(short_seq)
-    #     my_dna = my_dna.reverse_complement()
-    #     short_seq=str(my_dna)
-    #     if promoter.stop > len(my_dna)+promoter.start :
-    #         lib.log.info("Promoter of gene " + promoter.locus_tag + " can't be fully extracted")
-    
-    # short_seq_record = SeqRecord(Seq(short_seq), id=promoter.locus_tag, name=promoter.locus_tag, description=promoter.source+'_'+str(promoter.start)+':'+str(promoter.stop))
-    # return short_seq_record
-
 def select_promoter_by_locus_tag(tg_locus_tag):
     try:
         promoter = Promoter.objects.get(locus_tag=tg_locus_tag)
@@ -95,12 +80,3 @@ def select_promoter_by_locus_tag(tg_locus_tag):
     except(Exception) as error:
         lib.log.info("Failed to execute the select into table Promoter", error)
         lib.log.info(tg_locus_tag)
-        
-def create_db_connection():
-    try:
-        con = psycopg2.connect(host='localhost', database='funregulationtcc',
-        user='postgres', password='postgres')
-        lib.log.info("Successfully Connected to PostgreSQL")
-        return con
-    except (Exception, psycopg2.Error) as error:
-        lib.log.info(error)
