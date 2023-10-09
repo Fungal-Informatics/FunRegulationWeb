@@ -11,6 +11,7 @@ from .models import Organism, RegulatoryInteraction, Profile, Gene, ProjectAnaly
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from root.utils.tasks_email import send_email
+from root.engine.calculate_centrality import *
 from projects import tasks_external_tools, tasks_import, tasks_chain
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
@@ -286,3 +287,29 @@ class TaskStatusViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             index_header += 1
         
         return Response(result, status=status.HTTP_200_OK)
+
+class CalculateCentralityViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    def list(self, request):
+        tf_locus_tag = self.request.query_params.get('tf')
+        tf = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+            .filter(tf_locus_tag__locus_tag=tf_locus_tag)\
+            .distinct()\
+            .values_list('tf_locus_tag', flat=True)\
+            .order_by('tf_locus_tag','tg_locus_tag').distinct('tf_locus_tag')
+
+        tgs = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
+            .filter(tf_locus_tag__locus_tag=tf_locus_tag)\
+            .distinct()\
+            .values_list('tg_locus_tag', flat=True)\
+            .order_by('tg_locus_tag','tf_locus_tag').distinct('tg_locus_tag')
+
+        graph = create_graph(tf_nodes=tf, tg_nodes=tgs)
+        degree = calculate_degree_centrality(graph)
+        closeness = calculate_closeness_centrality(graph)
+        betweenness = calculate_betweenness_centrality(graph)
+        eigenvector = calculate_eigenvector_centrality(graph)
+        harmonic = calculate_harmonic_centrality(graph)
+        
+        return Response({'degree': degree, 'closeness': closeness, 'betweenness': betweenness, 
+                         'eigenvector': eigenvector, 'harmonic': harmonic}, status=status.HTTP_200_OK)
