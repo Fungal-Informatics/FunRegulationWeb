@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile, User
+from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile, User, Protein
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.sites.shortcuts import get_current_site
@@ -25,6 +25,7 @@ class RegulatoryInteractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegulatoryInteraction
         fields = [
+            'id',
             'tf_locus_tag',
             'tg_locus_tag',
             'regulatory_function',
@@ -88,3 +89,20 @@ class SetNewPasswordSerializer(serializers.Serializer):
         except Exception as e:
             raise AuthenticationFailed('The reset link is invalid', 401)
         return super().validate(attrs)
+
+class ProteinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Protein
+        fields = [
+            'id',
+            'product',
+            'interpro',
+            'pfam',
+            'go',
+            'gene3d',
+            'reactome',
+            'panther',
+            'uniprot',
+            'ec_number',
+            'cazy'
+        ]

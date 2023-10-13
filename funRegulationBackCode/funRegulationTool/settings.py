@@ -132,7 +132,13 @@ CELERY_TASK_ROUTES = {
     'analyse_registry': 'analyse_registry',
     'run_proteinortho': 'run_proteinortho',
     'run_rsat': 'run_rsat',
-    'send_email': 'send_email'
+    'send_email': 'send_email',
+    'run_create_graph': 'run_create_graph',
+    'run_degree_centrality': 'run_degree_centrality',
+    'run_closeness_centrality': 'run_closeness_centrality',
+    'run_betweenness_centrality': 'run_betweenness_centrality',
+    'run_eigenvector_centrality': 'run_eigenvector_centrality',
+    'run_harmonic_centrality': 'run_harmonic_centrality'
 }
 
 # GENERAL FILES

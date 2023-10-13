@@ -178,8 +178,43 @@ class ProjectAnalysisRegistry(models.Model):
                                          on_delete=models.SET_NULL)
     download_completed = models.BooleanField(default=False)
     task_download_organism = models.OneToOneField(TaskResult, null=True, blank=True,on_delete=models.SET_NULL)
+    task_create_graph = models.OneToOneField(TaskResult, null=True, blank=True, 
+                                             related_name='create_graph_analysis_registry_item',
+                                             on_delete=models.SET_NULL)
+    create_graph_error = models.IntegerField(null=True, blank=True)
+    task_calculate_degree = models.OneToOneField(TaskResult, null=True, blank=True, 
+                                                 related_name='calculate_degree_analysis_registry_item',
+                                                 on_delete=models.SET_NULL)
+    degree_error = models.IntegerField(null=True, blank=True)
+    task_calculate_closeness = models.OneToOneField(TaskResult, null=True, blank=True,
+                                                    related_name='calculate_closeness_analysis_registry_item',
+                                                    on_delete=models.SET_NULL)
+    closeness_error = models.IntegerField(null=True, blank=True)
+    task_calculate_betweenness = models.OneToOneField(TaskResult, null=True, blank=True,
+                                                      related_name='calculate_betweenness_analysis_registry_item',
+                                                      on_delete=models.SET_NULL)
+    betweenness_error = models.IntegerField(null=True, blank=True)
+    task_calculate_eigenvector = models.OneToOneField(TaskResult, null=True, blank=True,
+                                                      related_name='calculate_eigenvector_analysis_registry_item',
+                                                      on_delete=models.SET_NULL)
+    eigenvector_error = models.IntegerField(null=True, blank=True)
+    task_calculate_harmonic = models.OneToOneField(TaskResult, null=True, blank=True,
+                                                   related_name='calculate_harmonic_analysis_registry_item',
+                                                   on_delete=models.SET_NULL)
+    harmonic_error = models.IntegerField(null=True, blank=True)
     task = models.OneToOneField(TaskResult, null=True, blank=True,
                                 related_name='analysis_registry', on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return str(self.pk)
+
+class CalculateCentralityRegistry(models.Model):
+    locus_tag = models.ForeignKey(Gene, models.DO_NOTHING, primary_key=True, db_column='locus_tag', related_name='calculate_centrality_gene_locus_tag')
+    degree = models.FloatField(null=True, blank=True)
+    closeness = models.FloatField(null=True, blank=True)
+    betweenness = models.FloatField(null=True, blank=True)
+    eigenvector = models.FloatField(null=True, blank=True)
+    harmonic = models.FloatField(null=True, blank=True)
 
     def __str__(self):
         return str(self.pk)

@@ -1,18 +1,19 @@
 from api.serializers import OrganismSerializer, RegulatoryInteractionSerializer, ProjectAnalysisRegistrySerializer
 from api.serializers import CreateUserSerializer, UniqueTFsSerializer, UniqueTGsSerializer, UserSerializer
 from api.serializers import RequestPasswordEmailSerializer, SetNewPasswordSerializer, SearchGrnSerializer
+from api.serializers import ProteinSerializer
 from rest_framework import viewsets, permissions, mixins, generics
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import get_authorization_header
 from rest_framework.exceptions import APIException, AuthenticationFailed
 from django.db import DatabaseError, transaction
-from .models import Organism, RegulatoryInteraction, Profile, Gene, ProjectAnalysisRegistry
+from .models import Organism, RegulatoryInteraction, Profile, Gene, ProjectAnalysisRegistry, Protein
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from root.utils.tasks_email import send_email
 from root.engine.calculate_centrality import *
-from projects import tasks_external_tools, tasks_import, tasks_chain
+from projects import tasks_external_tools, tasks_import, tasks_chain, tasks_calc_centrality
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
@@ -248,7 +249,7 @@ class SetNewPasswordViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     
 class TaskStatusViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    #permission_classes = [permissions.AllowAny]
+    
     def list(self, request):
         headers = ["Order analyse","Download organism",'ProteinOrtho','Rsat']
         index_header = 0
@@ -291,25 +292,30 @@ class TaskStatusViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 class CalculateCentralityViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     def list(self, request):
-        tf_locus_tag = self.request.query_params.get('tf')
-        tf = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
-            .filter(tf_locus_tag__locus_tag=tf_locus_tag)\
-            .distinct()\
-            .values_list('tf_locus_tag', flat=True)\
-            .order_by('tf_locus_tag','tg_locus_tag').distinct('tf_locus_tag')
-
-        tgs = RegulatoryInteraction.objects.select_related('tf_locus_tag')\
-            .filter(tf_locus_tag__locus_tag=tf_locus_tag)\
-            .distinct()\
-            .values_list('tg_locus_tag', flat=True)\
-            .order_by('tg_locus_tag','tf_locus_tag').distinct('tg_locus_tag')
-
-        graph = create_graph(tf_nodes=tf, tg_nodes=tgs)
-        degree = calculate_degree_centrality(graph)
-        closeness = calculate_closeness_centrality(graph)
-        betweenness = calculate_betweenness_centrality(graph)
-        eigenvector = calculate_eigenvector_centrality(graph)
-        harmonic = calculate_harmonic_centrality(graph)
+        accession = self.request.query_params.get('accession')
+        tfs = list()
+        tgs = list()
+        # queryset = RegulatoryInteraction.objects.filter(organism_accession=accession)
         
-        return Response({'degree': degree, 'closeness': closeness, 'betweenness': betweenness, 
-                         'eigenvector': eigenvector, 'harmonic': harmonic}, status=status.HTTP_200_OK)
+        # for item in queryset:
+        #     tfs.append(item.tf_locus_tag.locus_tag)
+        #     tgs.append(item.tg_locus_tag.locus_tag)
+        
+        # graph = create_graph(tf_nodes=tfs, tg_nodes=tgs)
+        # degree = calculate_degree_centrality(graph)
+        
+        # closeness = calculate_closeness_centrality(graph)
+        # betweenness = calculate_betweenness_centrality(graph)
+        # eigenvector = calculate_eigenvector_centrality(graph)
+        # harmonic = calculate_harmonic_centrality(graph)
+        return Response({''}, status=status.HTTP_200_OK)
+        # return Response({'degree': degree, 'closeness': closeness, 'betweenness': betweenness, 
+        #                  'eigenvector': eigenvector, 'harmonic': harmonic}, status=status.HTTP_200_OK)
+    
+class ProteinInformationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    def list(self, request):
+        locus_tag = self.request.query_params.get('locus_tag')
+        proteinInformation = Protein.objects.filter(locus_tag__locus_tag=locus_tag)
+        serializer = ProteinSerializer(proteinInformation, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

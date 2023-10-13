@@ -22,3 +22,4 @@ app.autodiscover_tasks(lambda: settings.INSTALLED_APPS, related_name='tasks_impo
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS, related_name='tasks_external_tools')
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS, related_name='tasks_email')
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS, related_name='tasks_chain')
+app.autodiscover_tasks(lambda: settings.INSTALLED_APPS, related_name='tasks_calc_centrality')

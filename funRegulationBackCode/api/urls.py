@@ -3,6 +3,7 @@ from api.views import OrganismViewSet, RegulatoryInteractionViewSet, ProjectAnal
 from api.views import UserViewSet, LoginViewSet, UserLoginViewSet, RefreshTokenViewSet, LogoutViewSet
 from api.views import ConfirmAccountViewSet, PasswordTokenCheckViewSet, RequestPasswordResetEmail
 from api.views import SetNewPasswordViewSet, TaskStatusViewSet, CalculateCentralityViewSet
+from api.views import ProteinInformationViewSet
 
 app_name = 'api'
 
@@ -12,6 +13,7 @@ router.register(r'RegulatoryInteraction', RegulatoryInteractionViewSet, basename
 router.register(r'CreateGrn', ProjectAnalysisRegistryViewSet, basename='CreateGrn')
 router.register(r'CalculateCentrality', CalculateCentralityViewSet, basename='CalculateCentrality')
 router.register(r'^TaskStatus/$', TaskStatusViewSet, basename='TastStatus')
+router.register(r'^InfoProtein/$', ProteinInformationViewSet, basename='InfoProtein')
 router.register(r'CreateProfile', UserViewSet, basename='Profile')
 router.register(r'Login', LoginViewSet, basename='Login')
 router.register(r'UserTest', UserLoginViewSet, basename='UserTest')
