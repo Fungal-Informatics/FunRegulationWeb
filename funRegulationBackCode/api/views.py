@@ -13,7 +13,7 @@ from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from root.utils.tasks_email import send_email
 from root.engine.calculate_centrality import *
-from projects import tasks_external_tools, tasks_import, tasks_chain, tasks_calc_centrality
+from projects import tasks_chain
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.conf import settings
@@ -319,6 +319,7 @@ class TaskStatusViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         
         if(all_tasks == tasks_completed):
             result['Pipeline Completed'] = True if all_tasks == tasks_completed else False
+
         return Response(result, status=status.HTTP_200_OK)
 
 class CalculateCentralityViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

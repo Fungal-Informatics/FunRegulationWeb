@@ -1,5 +1,3 @@
-import logging
-
 from celery import shared_task, chain
 from django.conf import settings
 from django.db import transaction

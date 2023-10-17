@@ -146,16 +146,6 @@ class Tfbs(models.Model):
                                             'tf_locus_tag','tg_locus_tag'], 
                                             name='unique_tfbs')]
         db_table = 'tfbs'
-
-class Teste(models.Model):
-    model_protein = models.CharField(max_length=255, db_column='target_locus_tag')
-    target_protein = models.CharField(max_length=255, db_column='target_protein')
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['model_protein','target_protein'], 
-                                            name='unique_orthology_teste')]
-        db_table = 'teste'
   
 class ProjectAnalysisRegistry(models.Model):
     active = models.BooleanField(default=True)
@@ -223,6 +213,9 @@ class ProteinOrthoErrorType(enum.Enum):
     COMMAND_ERROR = 1
 
 class RsatErrorType(enum.Enum):
+    COMMAND_ERROR = 1
+
+class CalculateCentralityErrorType(enum.Enum):
     COMMAND_ERROR = 1
 
 class SystemPreferenceType(enum.Enum):

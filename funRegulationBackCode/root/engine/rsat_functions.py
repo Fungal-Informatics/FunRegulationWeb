@@ -1,3 +1,4 @@
+import logging
 import psycopg2
 import root.lib.library as lib
 import urllib.parse
@@ -8,19 +9,10 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from django.conf import settings
 
-#create log file
-log_name = os.path.join(settings.LOG_FILE_PATH)
-if os.path.isfile(log_name):
-    os.remove(log_name)
-
-#initialize script, log system info and cmd issue at runtime
-lib.setupLogging(log_name)
-FNULL = open(os.devnull, 'w')
-cmd_args = " ".join(sys.argv)+'\n'
-lib.log.debug(cmd_args)
+logger = logging.getLogger('main')
 
 def parse_pwm_file(in_file_pwm, organism_accession):
-    lib.log.info("Parsing "+ in_file_pwm)
+    logger.info("Parsing "+ in_file_pwm)
     with open(in_file_pwm) as in_file:
         for line in in_file:
             if line.startswith("#"): 
@@ -44,7 +36,7 @@ def parse_pwm_file(in_file_pwm, organism_accession):
                           msource = msource, pubmedid = pubmedid)
                 pwm.save()
     in_file.close()
-    lib.log.info(in_file_pwm + " parsed correctly")
+    logger.info(in_file_pwm + " parsed correctly")
 
 def select_tfs_by_organism(organism_accession):
     genes = list()
@@ -52,8 +44,7 @@ def select_tfs_by_organism(organism_accession):
         genes = Gene.objects.filter(is_tf=True).filter(organism_accession=organism_accession)
         return genes
     except(Exception) as error:
-        lib.log.info("Failed to execute the select into table Gene", error)
-        lib.log.info(organism_accession)
+        logger.error(f"Failed to execute the select into table Gene for organism {organism_accession}, error: {error}")
 
 def select_pwms_by_locus_tag(locus_tag):
     pwms = list()
@@ -61,8 +52,7 @@ def select_pwms_by_locus_tag(locus_tag):
         pwms = Pwm.objects.filter(locus_tag=locus_tag)
         return pwms
     except(Exception) as error:
-        lib.log.info("Failed to execute the select into table pwm", error)
-        lib.log.info(locus_tag)
+        logger.error(f"Failed to execute the select into table pwm for locus tag {locus_tag}, error: {error}")
 
 def select_regulatory_interactions_by_tf_locus_tag(tf_locus_tag):
     regulatory_interactions = list()
@@ -70,13 +60,11 @@ def select_regulatory_interactions_by_tf_locus_tag(tf_locus_tag):
         regulatory_interactions = RegulatoryInteraction.objects.filter(tf_locus_tag=tf_locus_tag)
         return regulatory_interactions
     except (Exception, psycopg2.Error) as error:
-        lib.log.info("Failed to execute the select into table regulatory_interaction", error)
-        lib.log.info(tf_locus_tag)
+        logger.error(f"Failed to execute the select into table regulatory_interaction for locus tag {tf_locus_tag}, error: {error}")
 
 def select_promoter_by_locus_tag(tg_locus_tag):
     try:
         promoter = Promoter.objects.get(locus_tag=tg_locus_tag)
         return promoter
     except(Exception) as error:
-        lib.log.info("Failed to execute the select into table Promoter", error)
-        lib.log.info(tg_locus_tag)
+        logger.error(f"Failed to execute the select into table Promoter for locus_tag {tg_locus_tag}, error: {error}")

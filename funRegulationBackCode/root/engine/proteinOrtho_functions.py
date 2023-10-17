@@ -1,3 +1,4 @@
+import logging
 import psycopg2
 import root.lib.library as lib
 from api.models import *
@@ -15,21 +16,13 @@ upstream = -1000
 downstream = 0
 
 #create log file
-log_name = os.path.join(settings.LOG_FILE_PATH)
-if os.path.isfile(log_name):
-    os.remove(log_name)
-
-#initialize script, log system info and cmd issue at runtime
-lib.setupLogging(log_name)
-FNULL = open(os.devnull, 'w')
-cmd_args = " ".join(sys.argv)+'\n'
-lib.log.debug(cmd_args)
+logger = logging.getLogger('main')
 
 gffInfoFields = ["seqid", "source", "ltype", "start", "end", "score", "strand", "phase", "attributes"]
 GFFRecord = namedtuple("GFFRecord", gffInfoFields)
 
 def parse_gff3_file(filename):
-    lib.log.info("Parsing "+ filename)
+    logger.info("Parsing "+ filename)
     with open(filename) as infile:
         for line in infile:
             if line.startswith("#"): continue
@@ -51,7 +44,7 @@ def parse_gff3_file(filename):
             #Alternatively, you can emit the dictionary here, if you need mutability:
             #    yield normalizedInfo
             yield GFFRecord(**normalizedInfo)
-    lib.log.info("GFF3 File parsed correctly")
+    logger.info("GFF3 File parsed correctly")
 
 def parse_gff_attributes(attributeString):
     if attributeString == ".": return {}
@@ -65,7 +58,7 @@ def parse_gff_attributes(attributeString):
     return ret
 
 def gff3_handler2(in_file_genes, organism_accession):
-    lib.log.info("Parsing "+ in_file_genes)
+    logger.info("Parsing "+ in_file_genes)
     recordCount = 0
     promoters_partially_extracted = 0
     organism_id = 0
@@ -103,7 +96,7 @@ def gff3_handler2(in_file_genes, organism_accession):
                 else:
                     # incomplete promoters
                     promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=1, stop=record.start+downstream)
-                    lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                    logger.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                     promoters_partially_extracted += 1
             else:
                 if record.end-source_size <= 0 :
@@ -111,16 +104,16 @@ def gff3_handler2(in_file_genes, organism_accession):
                 else:
                     # incomplete promoters
                     promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=source_size, stop=record.end-downstream)
-                    lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                    logger.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                     promoters_partially_extracted += 1
             recordCount += 1
             
             promoter.save()
         pos=pos+1
     
-    lib.log.info("%d genes were found" % recordCount)
-    lib.log.info("Promoters partially identified: %d" % promoters_partially_extracted)
-    lib.log.info("GFF3 file successfully parsed")
+    logger.info("%d genes were found" % recordCount)
+    logger.info("Promoters partially identified: %d" % promoters_partially_extracted)
+    logger.info("GFF3 file successfully parsed")
         
 def select_protein_by_id(protein_id):
     protein = Protein.objects.filter(id=protein_id).first()
@@ -154,7 +147,7 @@ def construct_grn_orthology(model_organism_accession, target_organism_accession)
                                                                     regulatory_function = rf_value, pubmedid_source = pubmed_value)
                             regulatory_interaction.save()
                         except(Exception, psycopg2.Error) as error:
-                            lib.log.info(error)
+                            logger.error(error)
                         #update gene as TF
                         Gene.objects.filter(pk=ortho_tg).update(is_tf=True)
 
@@ -166,8 +159,8 @@ def select_model_regulatory_by_organism_id(organism_id):
                                         .filter(tf_locus_tag__isnull=False).distinct()
         return model_regulatory_interactions
     except (Exception) as error:
-        lib.log.info("Failed to execute the select into table model_regulatory", error)
-        lib.log.info(organism_id)
+        logger.error("Failed to execute the select into table model_regulatory", error)
+        logger.error(organism_id)
 
 def select_orthologs_by_target_organism(model_locus_tag, target_organism_id, model_organism_id):
     orthology_list = list()
@@ -191,11 +184,11 @@ def select_orthologs_by_target_organism(model_locus_tag, target_organism_id, mod
         return orthology_list
         
     except (Exception, psycopg2.Error) as error:
-        lib.log.info("Failed to execute the select into table orthology", error)
-        lib.log.info(model_locus_tag)
+        logger.error("Failed to execute the select into table orthology", error)
+        logger.error(model_locus_tag)
 
 def gbff_handler(organism_accession, in_file_target_genome):
-    lib.log.info("Parsing " + organism_accession + in_file_target_genome)
+    logger.info("Parsing " + organism_accession + in_file_target_genome)
     recordCount = 0
     promoters_partially_extracted = 0
 
@@ -239,7 +232,7 @@ def gbff_handler(organism_accession, in_file_target_genome):
                                                 locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
                                                 source=seq_record.id, start=1, stop=mystart+downstream, 
                                                 promoter_seq=promoter_seq)
-                            lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                            logger.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                             promoters_partially_extracted += 1
                     else:
                         if myend-len(seq_record) <= 0 :
@@ -259,7 +252,7 @@ def gbff_handler(organism_accession, in_file_target_genome):
                                                 locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=strand, 
                                                 source=seq_record.id, start=len(seq_record), stop=myend-downstream, 
                                                 promoter_seq=promoter_seq)
-                            lib.log.info("Promoter of gene " + locus_tag + " can't be fully indentified")
+                            logger.info("Promoter of gene " + locus_tag + " can't be fully indentified")
                             promoters_partially_extracted += 1
                     promoter.save()
                     
@@ -307,6 +300,6 @@ def gbff_handler(organism_accession, in_file_target_genome):
                                       reactome='', panther='',uniprot=uniprot, ec_number=ec_number, cazy='')
                     protein.save()
                     
-        lib.log.info("%d genes were found" % recordCount)
-        lib.log.info("Promoters partially identified: %d" % promoters_partially_extracted)
-        lib.log.info("GFF3 file successfully parsed")
+        logger.info("%d genes were found" % recordCount)
+        logger.info("Promoters partially identified: %d" % promoters_partially_extracted)
+        logger.info("GFF3 file successfully parsed")

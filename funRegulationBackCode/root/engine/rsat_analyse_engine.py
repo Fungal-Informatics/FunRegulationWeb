@@ -1,6 +1,5 @@
 import logging
 from subprocess import Popen, PIPE
-from django.db import transaction
 from api.models import *
 import urllib.parse
 import os.path
@@ -8,6 +7,8 @@ from root.engine.rsat_functions import *
 from django.conf import settings
 import root.lib.library as lib
 from Bio import SeqIO
+
+logger = logging.getLogger('main')
 
 class RsatAnalyseEngine:
     def __init__(self, work_folder=None, pwms_folder=None, timeout=None):
@@ -64,7 +65,7 @@ class RsatAnalyseEngine:
                                 ret = rsat_call.returncode
                                 
                                 if ret != 0:
-                                    logging.info('Rsat analysis error for organism %s, Error: ' % organism_accession, output )
+                                    logger.error('Rsat analysis error for organism %s, Error: ' % organism_accession, output )
                                     self.__set_error(item, RsatErrorType.COMMAND_ERROR.value)
                                 else:
                                     result = str(output)

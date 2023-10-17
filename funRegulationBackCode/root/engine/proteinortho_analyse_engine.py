@@ -6,7 +6,8 @@ import urllib.parse
 import os.path
 from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, gbff_handler, construct_grn_orthology
-from time import sleep
+
+logger = logging.getLogger('main')
 
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
@@ -25,7 +26,7 @@ class ProteinOrthoAnalyseEngine:
         item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
         organism_analysed = ProjectAnalysisRegistry.objects.filter(organism_accession=organism_accession)\
                 .filter(proteinortho_analysed=True).count()
-        
+
         if organism_analysed <= 0:
             if not os.path.exists(self.work_folder+"/proteinOrtho"):
                 gbff_handler(organism_accession, target_organism_gbff_file)
@@ -40,8 +41,7 @@ class ProteinOrthoAnalyseEngine:
             ret = proc.returncode
 
             if ret != 0:
-                logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output)
-                logging.info(error)
+                logger.error(f'proteinOrtho analysis error for organism {organism_accession}, Error {output} and {error}')
                 self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
             else:
                 with open(filename) as in_file:
@@ -76,7 +76,7 @@ class ProteinOrthoAnalyseEngine:
                 construct_grn_orthology(model_organism[1], organism_accession)
                 self.__set_analysed(item)
         else:
-            logging.info('The organism {} already has the proteinOrtho data in database'.format(organism_accession))
+            logger.info(f'The organism {organism_accession} already has the proteinOrtho data in database')
 
     @staticmethod
     def __get_model_organism(organism_accession):
@@ -107,9 +107,9 @@ class ProteinOrthoAnalyseEngine:
                     results.append('GCA_000240135.3')
                 return results
             else:
-                return 'ERROR - NOT FOUND A MODEL ORGANISM FOR UPLOADED ORGANISM'
+                logger.error('ERROR - NOT FOUND A MODEL ORGANISM FOR UPLOADED ORGANISM')
         else:
-            return 'ERROR - NOT FOUND ORGANISM WITH THIS ACCESSION'
+            logger.error('ERROR - NOT FOUND ORGANISM WITH THIS ACCESSION')
 
     @staticmethod
     def __set_error(item, error_type):

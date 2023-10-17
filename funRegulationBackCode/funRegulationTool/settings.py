@@ -148,6 +148,31 @@ LOG_FILE_PATH = config('FUNREGULATION_LOG_FILE')
 NCBI_DOWNLOAD_PATH = config('FUNREGULATION_DOWNLOAD_NCBI_PATH')
 ALL_ORGANISMS_FILE_PATH = config('FUNREGULATION_ALL_ORGANISMS_FILE')
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'main_formatter': {
+            'format': "{asctime} - {levelname} - {module} - {message}",
+            'style': '{'
+        }
+    },
+    'handlers': {
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': LOG_FILE_PATH,
+            'formatter': 'main_formatter'
+        }
+    },
+    'loggers': {
+        'main': {
+            'handlers': ['file'],
+            'propagate': True,
+            'level': 'INFO'
+        }
+    }
+}
+
 # MODEL ORGANISMS FILES
 ORGANISM_MODEL_FUSARIUM_GRAMINEARUM_PATH = config('FUNREGULATION_ORGANISM_MODEL_FUSARIUM_GRAMINEARUM')
 ORGANISM_MODEL_NEUROSPORA_CRASSA_PATH = config('FUNREGULATION_ORGANISM_MODEL_NEUROSPORA_CRASSA')
