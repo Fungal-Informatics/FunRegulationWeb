@@ -7,6 +7,8 @@ import os.path
 from django.conf import settings
 from root.engine.proteinOrtho_functions import select_protein_by_id, gbff_handler, construct_grn_orthology
 
+logger = logging.getLogger('main')
+
 class ProteinOrthoAnalyseEngine:
     def __init__(self, proteinOrtho_path=None, work_folder=None, timeout=None):
         self.proteinOrtho_path = proteinOrtho_path
@@ -24,7 +26,7 @@ class ProteinOrthoAnalyseEngine:
         item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
         organism_analysed = ProjectAnalysisRegistry.objects.filter(organism_accession=organism_accession)\
                 .filter(proteinortho_analysed=True).count()
-        
+
         if organism_analysed <= 0:
             if not os.path.exists(self.work_folder+"/proteinOrtho"):
                 gbff_handler(organism_accession, target_organism_gbff_file)
@@ -34,12 +36,12 @@ class ProteinOrthoAnalyseEngine:
 
             proc = Popen(command, stdout=PIPE, stderr=PIPE)
             output, error = proc.communicate()
-            
+
             filename = self.work_folder+"/proteinOrtho" + "/myproject.proteinortho.tsv"
             ret = proc.returncode
 
             if ret != 0:
-                logging.info('proteinOrtho analysis error for organism %s, Error: ' % organism_accession, output )
+                logger.error(f'proteinOrtho analysis error for organism {organism_accession}, Error {output} and {error}')
                 self.__set_error(item, ProteinOrthoErrorType.COMMAND_ERROR.value)
             else:
                 with open(filename) as in_file:
@@ -59,16 +61,22 @@ class ProteinOrthoAnalyseEngine:
                                 if (record_model != '*' and record_target != '*'):
                                     model_protein = select_protein_by_id(record_model)
                                     target_protein = select_protein_by_id(record_target)
-                                    orthology = Orthology(model_protein=Protein.objects.get(locus_tag=model_protein),target_protein=Protein.objects.get(locus_tag=target_protein))
+
+                                    orthology = Orthology(model_organism_accession = Organism.objects.get(accession=model_organism[1]),
+                                                          model_locus_tag = Gene.objects.get(locus_tag=model_protein.locus_tag.locus_tag),
+                                                          model_protein = Protein.objects.get(id=model_protein.id),
+                                                          target_organism_accession = Organism.objects.get(accession=organism_accession),
+                                                          target_locus_tag = Gene.objects.get(locus_tag=target_protein.locus_tag.locus_tag),
+                                                          target_protein = Protein.objects.get(id=target_protein.id))
 
                                     if(orthology != None):
                                         orthology.save()
-
+                                        
                 in_file.close()
                 construct_grn_orthology(model_organism[1], organism_accession)
                 self.__set_analysed(item)
         else:
-            logging.info('The organism {} already has the proteinOrtho data in database'.format(organism_accession))
+            logger.info(f'The organism {organism_accession} already has the proteinOrtho data in database')
 
     @staticmethod
     def __get_model_organism(organism_accession):
@@ -99,14 +107,15 @@ class ProteinOrthoAnalyseEngine:
                     results.append('GCA_000240135.3')
                 return results
             else:
-                return 'ERROR - NOT FOUND A MODEL ORGANISM FOR UPLOADED ORGANISM'
+                logger.error('ERROR - NOT FOUND A MODEL ORGANISM FOR UPLOADED ORGANISM')
         else:
-            return 'ERROR - NOT FOUND ORGANISM WITH THIS ACCESSION'
+            logger.error('ERROR - NOT FOUND ORGANISM WITH THIS ACCESSION')
 
     @staticmethod
     def __set_error(item, error_type):
         item.proteinortho_error = error_type
-        item.save(update_fields=['proteinortho_error'])
+        item.proteinortho_analysed = False
+        item.save(update_fields=['proteinortho_error','proteinortho_analysed'])
 
     @staticmethod
     def __set_analysed(item):

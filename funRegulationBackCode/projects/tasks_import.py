@@ -18,6 +18,8 @@ from ncbi.datasets.metadata.genome import get_assembly_metadata_by_bioproject_ac
 
 from ncbi.datasets.package import dataset
 
+logger = logging.getLogger('main')
+
 @shared_task(bind=True, name='import_genes', base=FunRegulationBaseTask)
 def task_import_genes(self, registry_id, organism_accession):
     registry = ProjectAnalysisRegistry.objects.get(pk=registry_id)
@@ -35,8 +37,7 @@ def task_import_genes(self, registry_id, organism_accession):
     with DatasetsApiClient() as api_client:
         genome_api = DatasetsGenomeApi(api_client)
         try:
-            print("Begin download of genome data package ...")
-            lib.log.info(f"Begin download of genome {organism_accession} data package ...")
+            logger.info(f"Begin download of genome {organism_accession} data package ...")
             genome_ds_download = genome_api.download_assembly_package(
                 accessions,
                 include_annotation_type=["PROT_FASTA", "GENOME_GFF", "GENOME_GBFF"],
@@ -45,8 +46,8 @@ def task_import_genes(self, registry_id, organism_accession):
 
             with open(save_path, "wb") as f:
                 f.write(genome_ds_download.data)
-            print(f"Download completed -- see {zipfile_name}")
-            lib.log.info(f"Download completed of genome {organism_accession}")
+            
+            logger.info(f"Download completed of genome {organism_accession}")
             work_dir = download_path+organism_accession
             os.chdir(work_dir)
             with ZipFile(save_path, 'r') as zip:
@@ -54,9 +55,10 @@ def task_import_genes(self, registry_id, organism_accession):
                 zip.extract(zip.namelist()[3]) #GFF3
                 zip.extract(zip.namelist()[4]) #protein
                 zip.extract(zip.namelist()[5]) #sequence
-        except DatasetsApiException as e:
+        except (DatasetsApiException, Exception) as error:
+            logger.error(f'An error ocurred during the download of organism {organism_accession}, error: {error}')
             registry.download_completed = False
             registry.save()
-            sys.exit(f"Exception when calling download_assembly_package: {e}\n")
+            sys.exit(f"Exception when calling download_assembly_package: {error}\n")
     registry.download_completed = True
     registry.save()

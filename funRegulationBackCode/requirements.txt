@@ -10,7 +10,7 @@ django-celery-results==1.0.4
 idna==2.8
 kombu==4.5.0
 ncbi-datasets-pylib==12.13.2
-numpy==1.17.2
+numpy==1.21.2
 psycopg2-binary==2.8.6
 pytz==2018.9
 requests==2.22.0
@@ -22,3 +22,4 @@ yte==1.5.1
 zipp==3.11.0
 python-decouple==3.6
 djangorestframework==3.14.0
+networkx==2.6.3

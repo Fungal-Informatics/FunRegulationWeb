@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile, User
+from .models import Organism, RegulatoryInteraction, ProjectAnalysisRegistry, Profile, User, Protein, CalculateCentralityRegistry
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.contrib.sites.shortcuts import get_current_site
@@ -11,25 +11,12 @@ from rest_framework.exceptions import AuthenticationFailed
 class OrganismSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organism
-        fields = [
-            'accession',
-            'order',
-            'genus',
-            'species',
-            'strain',
-            'is_model',
-            'cis_bp'
-        ]
+        fields = ['accession','order','genus','species','strain','is_model','cis_bp']
 
 class RegulatoryInteractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegulatoryInteraction
-        fields = [
-            'tf_locus_tag',
-            'tg_locus_tag',
-            'regulatory_function',
-            'pubmedid_source'
-        ]
+        fields = ['id','tf_locus_tag','tg_locus_tag','regulatory_function','pubmedid_source']
     
 class ProjectAnalysisRegistrySerializer(serializers.Serializer):
     organism_accession = serializers.CharField(max_length=150, required=True, allow_blank=False, allow_null=False)
@@ -88,3 +75,13 @@ class SetNewPasswordSerializer(serializers.Serializer):
         except Exception as e:
             raise AuthenticationFailed('The reset link is invalid', 401)
         return super().validate(attrs)
+
+class ProteinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Protein
+        fields = ['id','product','interpro','pfam','go','gene3d','reactome','panther','uniprot','ec_number','cazy']
+
+class CentralitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CalculateCentralityRegistry
+        fields = ['locus_tag','degree','closeness','betweenness','eigenvector','harmonic']

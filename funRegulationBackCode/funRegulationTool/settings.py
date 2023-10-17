@@ -132,7 +132,13 @@ CELERY_TASK_ROUTES = {
     'analyse_registry': 'analyse_registry',
     'run_proteinortho': 'run_proteinortho',
     'run_rsat': 'run_rsat',
-    'send_email': 'send_email'
+    'send_email': 'send_email',
+    'run_create_graph': 'run_create_graph',
+    'run_degree_centrality': 'run_degree_centrality',
+    'run_closeness_centrality': 'run_closeness_centrality',
+    'run_betweenness_centrality': 'run_betweenness_centrality',
+    'run_eigenvector_centrality': 'run_eigenvector_centrality',
+    'run_harmonic_centrality': 'run_harmonic_centrality'
 }
 
 # GENERAL FILES
@@ -141,6 +147,31 @@ TARGET_PWMS_FILES_PATH = config('FUNREGULATION_TARGET_PWMS_FILES')
 LOG_FILE_PATH = config('FUNREGULATION_LOG_FILE')
 NCBI_DOWNLOAD_PATH = config('FUNREGULATION_DOWNLOAD_NCBI_PATH')
 ALL_ORGANISMS_FILE_PATH = config('FUNREGULATION_ALL_ORGANISMS_FILE')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'main_formatter': {
+            'format': "{asctime} - {levelname} - {module} - {message}",
+            'style': '{'
+        }
+    },
+    'handlers': {
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': LOG_FILE_PATH,
+            'formatter': 'main_formatter'
+        }
+    },
+    'loggers': {
+        'main': {
+            'handlers': ['file'],
+            'propagate': True,
+            'level': 'INFO'
+        }
+    }
+}
 
 # MODEL ORGANISMS FILES
 ORGANISM_MODEL_FUSARIUM_GRAMINEARUM_PATH = config('FUNREGULATION_ORGANISM_MODEL_FUSARIUM_GRAMINEARUM')

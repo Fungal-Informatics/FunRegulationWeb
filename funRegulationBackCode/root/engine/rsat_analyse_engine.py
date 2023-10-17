@@ -1,6 +1,5 @@
 import logging
 from subprocess import Popen, PIPE
-from django.db import transaction
 from api.models import *
 import urllib.parse
 import os.path
@@ -8,6 +7,8 @@ from root.engine.rsat_functions import *
 from django.conf import settings
 import root.lib.library as lib
 from Bio import SeqIO
+
+logger = logging.getLogger('main')
 
 class RsatAnalyseEngine:
     def __init__(self, work_folder=None, pwms_folder=None, timeout=None):
@@ -25,7 +26,7 @@ class RsatAnalyseEngine:
         item = ProjectAnalysisRegistry.objects.filter(pk=registry_id).first()
 
         if os.path.exists(target_pwm_file):
-            parse_pwm_file(target_pwm_file)
+            parse_pwm_file(target_pwm_file, organism_accession)
 
             tf_list = select_tfs_by_organism(organism_accession)
             for tf in tf_list:
@@ -59,11 +60,12 @@ class RsatAnalyseEngine:
                             else:
                                 cmd = "matrix-scan -v 1 -matrix_format cis-bp -m "+in_matrix+" -pseudo 1 -decimals 1 -2str -origin start -bginput -markov 1 -bg_pseudo 0.01 -return limits -return sites -return pval -return rank -lth score 1 -uth pval 1e-4 -i "+temp_file+" -seq_format fasta -n score"
                 
-                                rsat_call = Popen(cmd, shell=True,stdout=PIPE,stderr=PIPE)
+                                rsat_call = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
                                 output, error = rsat_call.communicate()
                                 ret = rsat_call.returncode
+                                
                                 if ret != 0:
-                                    logging.info('Rsat analysis error for organism %s, Error: ' % organism_accession, output )
+                                    logger.error('Rsat analysis error for organism %s, Error: ' % organism_accession, output )
                                     self.__set_error(item, RsatErrorType.COMMAND_ERROR.value)
                                 else:
                                     result = str(output)
@@ -78,10 +80,16 @@ class RsatAnalyseEngine:
                                     ln_pval = urllib.parse.unquote(parts[82])
                                     sig = urllib.parse.unquote(parts[83])
 
-                                    tfbs = Tfbs(regulatory_interaction=RegulatoryInteraction.objects.get(pk=regulatory_interaction.id),
-                                                pwm=Pwm.objects.get(pk=pwm.id), strand = strand, start = start, end = end, 
+                                    tfbs = Tfbs(regulatory_interaction = RegulatoryInteraction.objects.get(pk=regulatory_interaction.id),
+                                                organism_accession = Organism.objects.get(accession=organism_accession),
+                                                tf_locus_tag = Gene.objects.get(locus_tag=regulatory_interaction.tf_locus_tag.locus_tag),
+                                                tg_locus_tag = Gene.objects.get(locus_tag=regulatory_interaction.tg_locus_tag.locus_tag),
+                                                pwm = Pwm.objects.get(pk=pwm.id), strand = strand, start = start, end = end, 
                                                 sequence = sequence, weight = weight, pval = pval, ln_pval = ln_pval, sig = sig)
-                                    tfbs.save()
+                                    if strand == 'ncol' and start == 'nrow' and end == 'pseudo' and sequence == 'Wmin' and weight == 'Wmax' and pval == 'Wrange\\n;':
+                                        pass
+                                    else:
+                                        tfbs.save()
                         else:
                             lib.log.info("TFBS Prediction File already exists: " +regulatory_interaction.tf_locus_tag.locus_tag+"-"+regulatory_interaction.tg_locus_tag.locus_tag+"-"+pwm.motif_id+ ".txt")
             self.__set_analysed(item)
@@ -91,7 +99,8 @@ class RsatAnalyseEngine:
     @staticmethod
     def __set_error(item, error_type):
         item.rsat_error = error_type
-        item.save(update_fields=['rsat_error'])
+        item.rsat_analysed = False
+        item.save(update_fields=['rsat_error', 'rsat_analysed'])
 
     @staticmethod
     def __set_analysed(item):
