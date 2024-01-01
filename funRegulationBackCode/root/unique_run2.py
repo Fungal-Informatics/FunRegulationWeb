@@ -7,49 +7,25 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import urllib.parse
 from OldModels.models import *
-from time import sleep
 
 gffInfoFields = ["seqid", "source", "ltype", "start", "end", "score", "strand", "phase", "attributes"]
 GFFRecord = namedtuple("GFFRecord", gffInfoFields)
 modelsOrganisms = ['GCA_000182925.2', 'GCA_000240135.3', 'R64-3-1-SGD', 's10-m04-r16-AspGD']
-modelsAccessions = {'NEUROSPORA': 'GCA_000182925.2', 
-                    'FUSARIUM': 'GCA_000240135.3', 
-                    'SACCHAROMYCES':'R64-3-1-SGD',
-                    'A.NIDULANS':'s10-m04-r16-AspGD'}
-
-#GENES E PROMOTERS
-#1 - in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000182925.2/Neurospora_crassa.NC12.51.chr.gff3')
-#2 - in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000240135.3/Fusarium_graminearum_gca_000240135.ASM24013v3.51.gff3')
-#3 - in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/R64-3-1-SGD/Saccharomyces_cerevisiae_gene_set_R64-3-1_20210421.gff3')
-#4 - in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/s10-m04-r16-AspGD/A_nidulans_FGSC_A4_current_features.gff3')
-
-#PROTEINS
-#1 - in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000182925.2/Neurospora_crassa.NC12.pep.all.fa')
-#2 - in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000240135.3/Fusarium_graminearum_gca_000240135.ASM24013v3.pep.all.fa')
-#3 - in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/R64-3-1-SGD/Saccharomyces_cerevisiae_proteins_R64-3-1_20210421.fasta')
-#4 - in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/s10-m04-r16-AspGD/A_nidulans_FGSC_A4_current_orf_trans_all.fasta')
-
-#PWMS
-#in_file_pwms = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/cis-bp/species/model/GCA_000182925.2/TF_Information.txt')
-
-#MODELS_INTERACTIONS
-#1 - in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Aspergillus_nidulans.tsv')
-#2 - in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Fusarium_graminearum.tsv')
-#3 - in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Neurospora_crassa.tsv')
-in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Saccharomyces_cerevisiae.tsv')
+in_file_organisms = os.path.join("/home/gabriel/Desktop/FunRegulationBack-end/funregulation/FunRegulationWeb/funRegulationBackCode/funRegulation/projects/Database/Database/genbank_dataset_04-10-22.tsv")
+in_file_genes = ''
+in_file_proteins = ''
+in_file_model_regulatory = ''
 dbConnection = None;
 upstream = -1000
 downstream = 0
 
 def create_db_connection():
     try:
-        con = psycopg2.connect(host='localhost', database='funregulationtcc',
-        user='postgres', password='postgres')
+        con = psycopg2.connect(host='localhost', database='NAMEDB', user='USERDB', password='PASSDB')
         print("Successfully Connected to PostgreSQL")
         return con
     except (Exception, psycopg2.Error) as error:
-        pass
-        #lib.log.info(error)
+        print(error)
 
 def parse_gff_attributes(attributeString):
     if attributeString == ".": return {}
@@ -86,6 +62,43 @@ def parse_gff3_file(filename):
             yield GFFRecord(**normalizedInfo)
     #lib.log.info("GFF3 File parsed correctly")
 
+def parse_organism_file(filename):
+    print("Parsing "+ filename)
+    with open(filename) as in_file:
+        for line in in_file:
+            if line.startswith("#"): continue
+            parts = line.strip().split("\t")
+            accession = urllib.parse.unquote(parts[0])
+            order = urllib.parse.unquote(parts[1])
+            genus = urllib.parse.unquote(parts[2])
+            species = urllib.parse.unquote(parts[3])
+            strain = urllib.parse.unquote(parts[4])
+            is_model = urllib.parse.unquote(parts[5])
+            cis_bp = urllib.parse.unquote(parts[6])
+            organism = Organism(accession,order,genus,species,strain,is_model,cis_bp)
+            insert_organism(organism)
+    in_file.close()
+    print(filename + " parsed correctly")
+
+def insert_organism(organism):
+    dbConnection = create_db_connection()
+    try:
+        cursor = dbConnection.cursor()
+        count = cursor.execute("INSERT INTO organism VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                                                            (
+                                                            organism.accession,
+                                                            organism.order, 
+                                                            organism.genus, 
+                                                            organism.species, 
+                                                            organism.strain, 
+                                                            organism.is_model, 
+                                                            organism.cis_bp))
+        dbConnection.commit()
+        print("Record inserted successfully into TABLE organism")
+        cursor.close()
+    except (Exception, psycopg2.Error) as error:
+        print("Failed to insert data into TABLE organism "+error)
+        
 def insert_gene(gene):
     dbConnection = create_db_connection()
     try:
@@ -119,7 +132,7 @@ def insert_promoter(promoter):
     except (Exception, psycopg2.Error) as error:
         print("Failed to insert data into TABLE promoter", error)
          
-def gff3_handler(in_file_genes):
+def gff3_handler(in_file_genes, organism):
     print("Parsing "+ in_file_genes)
     recordCount = 0
     promoters_partially_extracted = 0
@@ -135,8 +148,6 @@ def gff3_handler(in_file_genes):
         if record.ltype == 'chromosome' or record.ltype == 'supercontig':
             source_size = record.end
             source = record.source
-            #organism_id = select_organism_by_assembly_name(source)
-            #organism_id = select_organism_by_assembly_name("R64-3-1-SGD")
         else:
             if (record.ltype == 'gene' or 
                 record.ltype == 'pseudogene' or 
@@ -144,42 +155,43 @@ def gff3_handler(in_file_genes):
                 record.ltype == 'blocked_reading_frame'):
                 #Access attributes like this: my_strand = record.strand
                 #gene = str(record.attributes)
-                locus_tag = record.attributes.get("ID")
-                #locus_tag = record.attributes.get("gene_id")
-                #description = record.attributes.get("description")
-                description = None #record.attributes.get("description")
+                if(organism == 's10-m04-r16-AspGD' or organism == 'R64-3-1-SGD'):
+                    locus_tag = record.attributes.get("ID")
+                    description = None
+                else:
+                    locus_tag = record.attributes.get("gene_id")
+                    description = record.attributes.get("description")
+
                 symbol_gene = ''
                 if record.attributes.get("Gene") is not None:
                     symbol_gene = record.attributes.get("Gene")
                 is_tf = False
-                #print(symbol_gene)
-                organsim_accession = 's10-m04-r16-AspGD'
-                gene = Gene(organsim_accession,locus_tag,symbol_gene,is_tf)
+                
+                gene = Gene(organism,locus_tag,symbol_gene,is_tf)
                 insert_gene(gene)
                 
                 promoter = None
                 if record.strand == '+':
                     if record.start+upstream > 0 :
-                        promoter = Promoter(organsim_accession,locus_tag, record.strand, record.seqid, record.start+upstream, record.start+downstream, None)
+                        promoter = Promoter(organism,locus_tag, record.strand, record.seqid, record.start+upstream, record.start+downstream, None)
                         #promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=record.start+upstream, stop=record.start+downstream, promoter_seq=None)
                     else:
                         # incomplete promoters
-                        promoter = Promoter(organsim_accession,locus_tag, record.strand, record.seqid, 1, record.start+downstream, None)
+                        promoter = Promoter(organism,locus_tag, record.strand, record.seqid, 1, record.start+downstream, None)
                         #promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=1, stop=record.start+downstream, promoter_seq=None)
                         print("Promoter of gene " + locus_tag + " can't be fully indentified")
                         promoters_partially_extracted += 1
                 else:
                     if record.end-source_size <= 0 :
-                        promoter = Promoter(organsim_accession,locus_tag, record.strand, record.seqid, record.end-upstream, record.end-downstream, None)
+                        promoter = Promoter(organism,locus_tag, record.strand, record.seqid, record.end-upstream, record.end-downstream, None)
                         #promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=record.end-upstream, stop=record.end-downstream,promoter_seq=None)
                     else:
                         # incomplete promoters
-                        promoter = Promoter(organsim_accession,locus_tag, record.strand, record.seqid, source_size, record.end-downstream, None)
+                        promoter = Promoter(organism,locus_tag, record.strand, record.seqid, source_size, record.end-downstream, None)
                         #promoter = Promoter(locus_tag=Gene.objects.get(locus_tag=locus_tag), strand=record.strand, source=record.seqid, start=source_size, stop=record.end-downstream, promoter_seq=None)
                         print("Promoter of gene " + locus_tag + " can't be fully indentified")
                         promoters_partially_extracted += 1
                 recordCount += 1
-                #promoter.save()
                 insert_promoter(promoter)
         pos=pos+1
 
@@ -213,15 +225,11 @@ def insert_protein(protein):
 def parse_protein_file(in_file_proteins, organism_accession):
     print("Parsing "+ in_file_proteins)
     for rec in SeqIO.parse(in_file_proteins, 'fasta'):
-        
-        #when locus_tag != protein_id
-        #rec.description = re.search(r'gene:(.*?) transcript:', rec.description).group(1)
-        #protein = Protein(organism_accession, rec.description, rec.id,'','','','','','','','','','')
-        #print(rec.description, rec.id)
-
-        #when locus_tag == protein_id
-        protein = Protein(organism_accession, rec.id, rec.id,'','','','','','','','','','')
-        #print(rec.id)
+        if(organism == 's10-m04-r16-AspGD' or organism == 'R64-3-1-SGD'):
+            protein = Protein(organism_accession, rec.id, rec.id,'','','','','','','','','','')
+        else:
+            rec.description = re.search(r'gene:(.*?) transcript:', rec.description).group(1)
+            protein = Protein(organism_accession, rec.description, rec.id,'','','','','','','','','','')
         insert_protein(protein)
 
 def insert_pwm(pwm):
@@ -370,11 +378,29 @@ def parse_model_regulatory_file(filename, organism_accession):
     in_file.close()
     print(filename + " parsed correctly")
 
-#gff3_handler(in_file_genes)
-#parse_protein_file(in_file_proteins, 's10-m04-r16-AspGD')
-# for organism in modelsOrganisms:
-#     parse_pwm_file(organism)
-#parse_model_regulatory_file(in_file_model_regulatory, 's10-m04-r16-AspGD')
-#parse_model_regulatory_file(in_file_model_regulatory, 'GCA_000240135.3')
-#parse_model_regulatory_file(in_file_model_regulatory, 'GCA_000182925.2')
-parse_model_regulatory_file(in_file_model_regulatory, 'R64-3-1-SGD')
+parse_organism_file(in_file_organisms)
+for organism in modelsOrganisms:
+    if(organism == 'GCA_000182925.2'):
+        #GENES E PROMOTERS
+        in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000182925.2/Neurospora_crassa.NC12.51.chr.gff3')
+        #PROTEINS
+        in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000182925.2/Neurospora_crassa.NC12.pep.all.fa')
+        #MODELS_INTERACTIONS
+        in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Neurospora_crassa.tsv')
+    elif(organism == 'GCA_000240135.3'):
+        in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000240135.3/Fusarium_graminearum_gca_000240135.ASM24013v3.51.gff3')
+        in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/GCA_000240135.3/Fusarium_graminearum_gca_000240135.ASM24013v3.pep.all.fa')
+        in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Fusarium_graminearum.tsv')
+    elif(organism == 'R64-3-1-SGD'):
+        in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/R64-3-1-SGD/Saccharomyces_cerevisiae_gene_set_R64-3-1_20210421.gff3')
+        in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/R64-3-1-SGD/Saccharomyces_cerevisiae_proteins_R64-3-1_20210421.fasta')
+        in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Saccharomyces_cerevisiae.tsv')
+    elif(organism == 's10-m04-r16-AspGD'):
+        in_file_genes = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/s10-m04-r16-AspGD/A_nidulans_FGSC_A4_current_features.gff3')
+        in_file_proteins = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/genbank/s10-m04-r16-AspGD/A_nidulans_FGSC_A4_current_orf_trans_all.fasta')
+        in_file_model_regulatory = os.path.join('/home/gabriel/Downloads/ArquivosTCC/Database/Database/model-interactions/Aspergillus_nidulans.tsv')
+    
+    gff3_handler(in_file_genes, organism)
+    parse_protein_file(in_file_proteins, organism)
+    parse_pwm_file(organism)
+    parse_model_regulatory_file(in_file_model_regulatory, organism)

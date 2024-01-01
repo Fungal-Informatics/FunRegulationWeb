@@ -44,7 +44,6 @@ class Organism(models.Model):
     strain = models.CharField(max_length=255, blank=True, null=True)
     is_model = models.BooleanField(blank=True, null=True)
     cis_bp = models.BooleanField(blank=True, null=True)
-    removed = models.BooleanField(default=False)
 
     def __str__(self):
         return self.accession
