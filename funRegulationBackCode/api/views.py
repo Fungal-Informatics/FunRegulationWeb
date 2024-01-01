@@ -80,7 +80,7 @@ class ProjectAnalysisRegistryViewSet(mixins.ListModelMixin, viewsets.GenericView
                     registry.download_organism = True
                     tasks_chain.analyse_registry(registry)
 
-            return Response({'registro': registry.pk, 'requisicao':serializer.data}, status=status.HTTP_200_OK)
+            return Response({'registry': registry.pk, 'request': serializer.data}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -226,7 +226,7 @@ class RequestPasswordResetEmail(mixins.ListModelMixin, viewsets.GenericViewSet):
 class PasswordTokenCheckViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     def list(self, request, uidb64, token):
         try:
-            print(uidb64)
+            #print(uidb64)
             id = smart_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(id=id)
 
